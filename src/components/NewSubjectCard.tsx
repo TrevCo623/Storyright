@@ -1,0 +1,45 @@
+'use client';
+
+import { useState } from 'react';
+import { createSubject } from '@/app/subjects/actions';
+
+export default function NewSubjectCard() {
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <button className="project-card new-project-card" onClick={() => setOpen(true)}>
+        <div className="new-project-plus">+</div>
+        <div className="project-card-title">New project</div>
+      </button>
+    );
+  }
+
+  return (
+    <form
+      className="project-card"
+      action={async (formData) => {
+        await createSubject(formData);
+        setOpen(false);
+      }}
+    >
+      <input
+        name="title"
+        className="text-input"
+        placeholder="Project title…"
+        autoFocus
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') setOpen(false);
+        }}
+      />
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button type="submit" className="primary-btn" style={{ padding: '6px 14px', fontSize: 13 }}>
+          Create
+        </button>
+        <button type="button" className="secondary-btn" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
