@@ -1,22 +1,55 @@
-import ThemeToggle from '@/components/ThemeToggle';
+import { notFound } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import OutlineView from '@/components/Outline/OutlineView';
 
-export default function SubjectOverviewPage() {
+export default async function SubjectOverviewPage({
+  params,
+}: {
+  params: { subjectId: string };
+}) {
+  const subjectId = params.subjectId;
+  const supabase = createClient();
+
+  const { data: subject } = await supabase
+    .from('subjects')
+    .select('id, premise, themes, takeaway, outline_review')
+    .eq('id', subjectId)
+    .single();
+  if (!subject) notFound();
+
+  const { data: sections } = await supabase
+    .from('sections')
+    .select('id, type')
+    .eq('subject_id', subjectId);
+
+  const chaptersSectionId = sections?.find((s) => s.type === 'chapters')?.id ?? null;
+  const threadsSectionId = sections?.find((s) => s.type === 'threads')?.id ?? null;
+
+  const [{ data: chapters }, { data: threads }, { data: characters }, { data: places }] =
+    await Promise.all([
+      chaptersSectionId
+        ? supabase.from('entries').select('*').eq('section_id', chaptersSectionId).order('position')
+        : Promise.resolve({ data: [] as never[] }),
+      threadsSectionId
+        ? supabase.from('entries').select('*').eq('section_id', threadsSectionId).order('position')
+        : Promise.resolve({ data: [] as never[] }),
+      supabase.from('characters').select('*').eq('subject_id', subjectId).order('position'),
+      supabase.from('places').select('*').eq('subject_id', subjectId).order('position'),
+    ]);
+
   return (
-    <main className="editor-area">
-      <header className="topbar">
-        <div className="breadcrumb">Overview</div>
-        <div className="topbar-right">
-          <ThemeToggle />
-        </div>
-      </header>
-      <div className="editor-scroll">
-        <div className="editor-column">
-          <p className="empty-state">
-            Pick an entry from the sidebar, or add a new one with the “+” next to a section, to
-            start writing.
-          </p>
-        </div>
-      </div>
-    </main>
+    <OutlineView
+      subjectId={subjectId}
+      chaptersSectionId={chaptersSectionId}
+      threadsSectionId={threadsSectionId}
+      premise={subject.premise ?? ''}
+      themes={subject.themes ?? ''}
+      takeaway={subject.takeaway ?? ''}
+      outlineReview={subject.outline_review ?? null}
+      chapters={chapters ?? []}
+      threads={threads ?? []}
+      characters={characters ?? []}
+      places={places ?? []}
+    />
   );
 }

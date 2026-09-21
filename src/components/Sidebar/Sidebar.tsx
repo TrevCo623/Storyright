@@ -12,12 +12,14 @@ interface Props {
   subjectTitle: string;
   sections: Section[];
   entries: Entry[];
+  onCollapse?: () => void;
 }
 
-export default function Sidebar({ subjectId, subjectTitle, sections, entries }: Props) {
+export default function Sidebar({ subjectId, subjectTitle, sections, entries, onCollapse }: Props) {
   const pathname = usePathname();
   const activeEntryId = pathname?.match(/\/entries\/([^/]+)/)?.[1];
   const [addingSection, setAddingSection] = useState(false);
+  const [creatingSection, setCreatingSection] = useState(false);
 
   const entriesBySection = new Map<string, Entry[]>();
   entries.forEach((e) => {
@@ -33,8 +35,23 @@ export default function Sidebar({ subjectId, subjectTitle, sections, entries }: 
           <Link href="/subjects" className="back-link">
             ‹ All projects
           </Link>
+          {onCollapse && (
+            <button className="icon-btn" title="Collapse project sidebar" onClick={onCollapse}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                <rect x="1.85" y="3.15" width="4.35" height="9.7" rx="0.5" fill="currentColor" />
+              </svg>
+            </button>
+          )}
         </div>
         <div className="project-name">{subjectTitle}</div>
+
+        <Link
+          href={`/subjects/${subjectId}`}
+          className={`tree-item outline-link${pathname === `/subjects/${subjectId}` ? ' active' : ''}`}
+        >
+          ◈ Outline
+        </Link>
 
         {sections.map((section) => (
           <SectionBlock
@@ -51,8 +68,13 @@ export default function Sidebar({ subjectId, subjectTitle, sections, entries }: 
         {addingSection ? (
           <form
             action={async (fd) => {
-              await createSection(subjectId, fd);
-              setAddingSection(false);
+              setCreatingSection(true);
+              try {
+                await createSection(subjectId, fd);
+                setAddingSection(false);
+              } finally {
+                setCreatingSection(false);
+              }
             }}
             style={{ marginBottom: 10 }}
           >
@@ -61,9 +83,10 @@ export default function Sidebar({ subjectId, subjectTitle, sections, entries }: 
               className="text-input"
               placeholder="Folder name…"
               autoFocus
-              style={{ fontSize: 12.5, padding: '6px 8px' }}
+              disabled={creatingSection}
+              style={{ fontSize: 12.5, padding: '6px 8px', opacity: creatingSection ? 0.6 : 1 }}
               onKeyDown={(e) => e.key === 'Escape' && setAddingSection(false)}
-              onBlur={(e) => !e.target.value && setAddingSection(false)}
+              onBlur={(e) => !e.target.value && !creatingSection && setAddingSection(false)}
             />
           </form>
         ) : (
@@ -96,6 +119,7 @@ function SectionBlock({
   activeEntryId?: string;
 }) {
   const [adding, setAdding] = useState(false);
+  const [creatingEntry, setCreatingEntry] = useState(false);
   const label = section.type === 'custom' ? section.title : SECTION_LABELS[section.type] ?? section.title;
 
   return (
@@ -111,8 +135,13 @@ function SectionBlock({
         <form
           action={async (fd) => {
             const title = String(fd.get('title') || '');
-            setAdding(false);
-            await createEntry(subjectId, section.id, null, title);
+            setCreatingEntry(true);
+            try {
+              await createEntry(subjectId, section.id, null, title);
+              setAdding(false);
+            } finally {
+              setCreatingEntry(false);
+            }
           }}
         >
           <input
@@ -120,7 +149,8 @@ function SectionBlock({
             className="text-input"
             placeholder="Untitled…"
             autoFocus
-            style={{ fontSize: 12.5, padding: '5px 8px', marginBottom: 4 }}
+            disabled={creatingEntry}
+            style={{ fontSize: 12.5, padding: '5px 8px', marginBottom: 4, opacity: creatingEntry ? 0.6 : 1 }}
             onKeyDown={(e) => e.key === 'Escape' && setAdding(false)}
           />
         </form>
@@ -155,6 +185,7 @@ function TreeItem({
 }) {
   const [addingChild, setAddingChild] = useState(false);
   const [hover, setHover] = useState(false);
+  const [creatingChild, setCreatingChild] = useState(false);
 
   return (
     <div>
@@ -185,8 +216,13 @@ function TreeItem({
         <form
           action={async (fd) => {
             const title = String(fd.get('title') || '');
-            setAddingChild(false);
-            await createEntry(subjectId, sectionId, node.id, title);
+            setCreatingChild(true);
+            try {
+              await createEntry(subjectId, sectionId, node.id, title);
+              setAddingChild(false);
+            } finally {
+              setCreatingChild(false);
+            }
           }}
         >
           <input
@@ -194,7 +230,14 @@ function TreeItem({
             className="text-input"
             placeholder="Untitled…"
             autoFocus
-            style={{ fontSize: 12.5, padding: '5px 8px', marginLeft: 20 + depth * 12, marginBottom: 4 }}
+            disabled={creatingChild}
+            style={{
+              fontSize: 12.5,
+              padding: '5px 8px',
+              marginLeft: 20 + depth * 12,
+              marginBottom: 4,
+              opacity: creatingChild ? 0.6 : 1,
+            }}
             onKeyDown={(e) => e.key === 'Escape' && setAddingChild(false)}
           />
         </form>

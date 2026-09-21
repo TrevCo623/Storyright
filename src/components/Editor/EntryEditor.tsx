@@ -15,6 +15,8 @@ import {
   type VisibleSuggestion,
 } from './suggestionExtension';
 import { saveEntry, saveSuggestionState, recordSuggestionFeedback } from '@/app/subjects/[subjectId]/entries/[entryId]/actions';
+import { syncExtractedEntities } from '@/app/subjects/[subjectId]/outline/actions';
+import type { ExtractedEntity } from '@/lib/claude';
 import { docToMarkdown } from '@/lib/markdown';
 import type { AdviceMessage, Entry, SuggestionCategory, SuggestionDef, SuggestionState } from '@/lib/types';
 
@@ -340,10 +342,13 @@ export default function EntryEditor({ subjectId, entry }: Props) {
       const res = await fetch('/api/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: titleRef.current, paragraphs, existing }),
+        body: JSON.stringify({ entryId: entry.id, title: titleRef.current, paragraphs, existing }),
       });
       if (!res.ok) throw new Error('Review request failed');
-      const { suggestions } = (await res.json()) as { suggestions: RawSuggestionWithId[] };
+      const { suggestions, entities } = (await res.json()) as {
+        suggestions: RawSuggestionWithId[];
+        entities?: ExtractedEntity[];
+      };
 
       const allSuggestions = { ...suggestionState.allSuggestions };
       const originalText = { ...suggestionState.originalText };
@@ -387,15 +392,21 @@ export default function EntryEditor({ subjectId, entry }: Props) {
 
       setSuggestionState(nextState);
       setNewIds(new Set(addedIds));
-      setToast(
-        addedIds.length
-          ? `${addedIds.length} new suggestion${addedIds.length === 1 ? '' : 's'}`
-          : 'All clear — nothing new to flag'
-      );
+
+      const suggestionMsg = addedIds.length
+        ? `${addedIds.length} new suggestion${addedIds.length === 1 ? '' : 's'}`
+        : 'All clear — nothing new to flag';
+      const entityMsg = entities?.length
+        ? ` · ${entities.length} outline detail${entities.length === 1 ? '' : 's'} synced`
+        : '';
+      setToast(suggestionMsg + entityMsg);
 
       await saveSuggestionState(entry.id, nextState);
       for (const f of autoResolved) {
         void recordSuggestionFeedback(entry.id, f.id, f.category, 'done');
+      }
+      if (entities?.length) {
+        void syncExtractedEntities(subjectId, entities);
       }
     } catch (err) {
       console.error('Review failed', err);
@@ -446,7 +457,10 @@ export default function EntryEditor({ subjectId, entry }: Props) {
               title="Toggle suggestions"
               onClick={() => setRailOpen((v) => !v)}
             >
-              ☰
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                <rect x="9.8" y="3.15" width="4.35" height="9.7" rx="0.5" fill="currentColor" />
+              </svg>
             </button>
           </div>
         </header>
@@ -481,7 +495,7 @@ export default function EntryEditor({ subjectId, entry }: Props) {
 
       {railOpen && (
         <aside className="rail">
-          <div className="rail-header">SUGGESTIONS</div>
+          <div className="rail-header">NOTES</div>
           <div className="rail-inner" ref={railRef}>
             {orderedSuggestions.length === 0 ? (
               <p className="rail-empty">Click Review to get feedback on this piece.</p>

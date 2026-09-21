@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { SuggestionCategory } from '@/lib/types';
+import type { OutlineSuggestionCategory, SuggestionCategory } from '@/lib/types';
 
 let client: Anthropic | null = null;
 export function claude() {
@@ -32,6 +32,22 @@ export function extractJsonArray(text: string): unknown[] {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+// Same tolerant-parsing idea as extractJsonArray, but for a single top-level
+// JSON object (used by the Outline Review, which returns {summary, suggestions}).
+export function extractJsonObject(text: string): Record<string, unknown> | null {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1] : text;
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) return null;
+  try {
+    const parsed = JSON.parse(candidate.slice(start, end + 1));
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
   }
 }
 
@@ -144,6 +160,183 @@ export async function generateStyleFingerprint(args: FingerprintArgs): Promise<s
     .map((block) => block.text)
     .join('\n')
     .trim();
+}
+
+export interface ExtractedEntity {
+  type: 'character' | 'place';
+  name: string;
+  summary: string;
+}
+
+interface ExtractEntitiesArgs {
+  chapterTitle: string;
+  chapterText: string;
+  knownCharacters: string[];
+  knownPlaces: string[];
+}
+
+// Runs alongside a chapter's explicit Review click (never ambiently — see
+// the locked Review-workflow rule) to keep the Outline's Characters/Places
+// lists in sync with what's actually been written. Only surfaces entities
+// the chapter gives real, summarizable detail about — not every proper noun.
+export async function extractEntities(args: ExtractEntitiesArgs): Promise<ExtractedEntity[]> {
+  const { chapterTitle, chapterText, knownCharacters, knownPlaces } = args;
+  if (chapterText.trim().length < 20) return [];
+
+  const system = `You read one chapter of a work-in-progress and identify which named characters and named places it gives concrete, summarizable detail about — for a writer's outline/story-bible page, not a full NLP entity extraction.
+
+Rules:
+- Return ONLY a JSON array, no prose, no markdown fences.
+- Each item: {"type": "character"|"place", "name": exact name as it appears in the text, "summary": one or two sentences describing what THIS chapter reveals about them (traits, role, relationships, appearance for characters; description or narrative significance for places)}.
+- Skip anything mentioned only in passing with no real detail (a name dropped once with nothing said about them isn't worth an entry).
+- Known characters already tracked: ${knownCharacters.length ? knownCharacters.join(', ') : 'none yet'}.
+- Known places already tracked: ${knownPlaces.length ? knownPlaces.join(', ') : 'none yet'}.
+- For a name that matches one of those known lists (case-insensitive), still include it if this chapter adds meaningful new detail worth folding in — write the summary as a fresh synthesis, not just what's new.
+- Favor precision over recall — at most 5 entities, often fewer or zero.
+- If nothing meets the bar, return an empty array [].`;
+
+  const user = `Chapter: ${chapterTitle || 'Untitled'}
+
+${chapterText}`;
+
+  const response = await claude().messages.create({
+    model: MODEL,
+    max_tokens: 1200,
+    system,
+    messages: [{ role: 'user', content: user }],
+  });
+
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+
+  const raw = extractJsonArray(text);
+  return raw
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+    .map((item) => ({
+      type: item.type === 'place' ? 'place' : 'character',
+      name: typeof item.name === 'string' ? item.name.trim() : '',
+      summary: typeof item.summary === 'string' ? item.summary.trim() : '',
+    }))
+    .filter((e): e is ExtractedEntity => Boolean(e.name && e.summary));
+}
+
+interface OutlineReviewArgs {
+  title: string;
+  premise: string;
+  themes: string;
+  takeaway: string;
+  chapters: { title: string; synopsis: string; target_feeling: string }[];
+  characters: { name: string; role: string; summary: string }[];
+  places: { name: string; summary: string }[];
+  threads: string[];
+}
+
+export interface RawOutlineSuggestion {
+  category: OutlineSuggestionCategory;
+  heading: string;
+  desc: string;
+}
+
+export interface OutlineReviewResult {
+  summary: string;
+  suggestions: RawOutlineSuggestion[];
+}
+
+const OUTLINE_CATEGORY_HEADINGS: Record<OutlineSuggestionCategory, string> = {
+  chapter: 'Story beat',
+  character: 'Character',
+  place: 'Place',
+  theme: 'Theme',
+};
+
+// The Outline page's explicit Review: synthesizes the whole master plan
+// (summary + chapters + characters + places + threads) back to the writer
+// and suggests concrete additions/strengthening moves — never generated
+// ambiently, only on click, mirroring the entry-level Review rule.
+export async function generateOutlineReview(args: OutlineReviewArgs): Promise<OutlineReviewResult> {
+  const { title, premise, themes, takeaway, chapters, characters, places, threads } = args;
+
+  const chapterList = chapters.length
+    ? chapters
+        .map(
+          (c, i) =>
+            `${i + 1}. "${c.title}"${c.synopsis ? ` — ${c.synopsis}` : ' — (no summary yet)'}${
+              c.target_feeling ? ` [intended feeling: ${c.target_feeling}]` : ''
+            }`
+        )
+        .join('\n')
+    : 'None outlined yet.';
+
+  const characterList = characters.length
+    ? characters.map((c) => `- ${c.name}${c.role ? ` (${c.role})` : ''}: ${c.summary || '(no detail yet)'}`).join('\n')
+    : 'None yet.';
+
+  const placeList = places.length
+    ? places.map((p) => `- ${p.name}: ${p.summary || '(no detail yet)'}`).join('\n')
+    : 'None yet.';
+
+  const threadList = threads.length ? threads.map((t) => `- ${t}`).join('\n') : 'None yet.';
+
+  const system = `You are Storyright's outline consultant. A writer has filled in some or all of a project's master plan — a story summary, a chapter-by-chapter beat sheet, a character list, a place list, and a catch-all "Threads" notes list. Whatever is still empty is simply not written yet, not a flaw.
+
+Give them two things, returned as ONLY a JSON object (no prose, no markdown fences) shaped exactly like:
+{"summary": "...", "suggestions": [{"category": "chapter"|"character"|"place"|"theme", "heading": "...", "desc": "..."}]}
+
+- "summary": 2-4 sentences reflecting the story back to them in your own words — what it's about, where it's strong, so they can check it matches what's in their head. Written directly to the writer, warm but substantive, not generic praise.
+- "suggestions": concrete opportunities to strengthen the story — a missing chapter/beat that would close a gap ("chapter"), a character who needs more definition or a relationship that's unclear ("character"), a place that's named but underdescribed or a setting that could do more work ("place"), or a way to reinforce the stated themes more consistently across chapters ("theme"). Each "desc" should be one or two specific, actionable sentences, not vague encouragement. At most 6 suggestions, favor quality over quantity. If the outline is too sparse to say anything specific, keep suggestions short and focused on what to fill in first rather than inventing detail.`;
+
+  const user = `Title: ${title || 'Untitled'}
+
+Story summary:
+- What it's about: ${premise || '(not written yet)'}
+- Themes: ${themes || '(not written yet)'}
+- Reader takeaway: ${takeaway || '(not written yet)'}
+
+Chapters:
+${chapterList}
+
+Characters:
+${characterList}
+
+Places:
+${placeList}
+
+Threads (miscellaneous notes):
+${threadList}`;
+
+  const response = await claude().messages.create({
+    model: MODEL,
+    max_tokens: 1800,
+    system,
+    messages: [{ role: 'user', content: user }],
+  });
+
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+
+  const parsed = extractJsonObject(text);
+  const summary = typeof parsed?.summary === 'string' ? parsed.summary : '';
+  const rawSuggestions = Array.isArray(parsed?.suggestions) ? (parsed.suggestions as unknown[]) : [];
+
+  const suggestions = rawSuggestions
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+    .map((item) => {
+      const category = (['chapter', 'character', 'place', 'theme'].includes(item.category as string)
+        ? item.category
+        : 'theme') as OutlineSuggestionCategory;
+      return {
+        category,
+        heading: typeof item.heading === 'string' ? item.heading : OUTLINE_CATEGORY_HEADINGS[category],
+        desc: typeof item.desc === 'string' ? item.desc : '',
+      };
+    })
+    .filter((s) => s.desc);
+
+  return { summary, suggestions };
 }
 
 interface AdviceArgs {

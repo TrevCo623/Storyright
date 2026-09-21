@@ -1,10 +1,12 @@
 // Shared app-level types. `Database` mirrors supabase/migrations/0001_init.sql —
 // keep the two in sync if the schema changes.
 
-export type SectionType = 'chapters' | 'scribbles' | 'research' | 'custom';
+export type SectionType = 'chapters' | 'threads' | 'research' | 'custom';
 export type FingerprintStatus = 'not_started' | 'processing' | 'ready' | 'error';
 export type SuggestionCategory = 'word' | 'tone' | 'grammar' | 'pacing' | 'style';
 export type SuggestionOutcome = 'done' | 'dismissed';
+export type EntitySource = 'manual' | 'auto';
+export type OutlineSuggestionCategory = 'chapter' | 'character' | 'place' | 'theme';
 
 export interface SuggestionDef {
   id: string;
@@ -55,11 +57,52 @@ export interface Profile {
   created_at: string;
 }
 
+export interface OutlineSuggestion {
+  id: string;
+  category: OutlineSuggestionCategory;
+  heading: string;
+  desc: string;
+}
+
+export interface OutlineReview {
+  summary: string;
+  suggestions: OutlineSuggestion[];
+  generated_at: string;
+}
+
 export interface Subject {
   id: string;
   user_id: string;
   title: string;
   description: string | null;
+  // Outline / master plan fields — see [[project_vision]] "Outline" page.
+  premise: string;
+  themes: string;
+  takeaway: string;
+  outline_review: OutlineReview | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Character {
+  id: string;
+  subject_id: string;
+  name: string;
+  role: string;
+  summary: string;
+  position: number;
+  source: EntitySource;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Place {
+  id: string;
+  subject_id: string;
+  name: string;
+  summary: string;
+  position: number;
+  source: EntitySource;
   created_at: string;
   updated_at: string;
 }
@@ -83,6 +126,10 @@ export interface Entry {
   word_count: number;
   position: number;
   suggestion_state: SuggestionState;
+  // Meaningful for entries in the 'chapters' section — surfaced on the
+  // Outline page as the chapter's summary + intended emotional note.
+  synopsis: string;
+  target_feeling: string;
   created_at: string;
   updated_at: string;
 }
@@ -113,6 +160,8 @@ export type Database = {
       subjects: { Row: Subject; Insert: Partial<Subject>; Update: Partial<Subject> };
       sections: { Row: Section; Insert: Partial<Section>; Update: Partial<Section> };
       entries: { Row: Entry; Insert: Partial<Entry>; Update: Partial<Entry> };
+      characters: { Row: Character; Insert: Partial<Character>; Update: Partial<Character> };
+      places: { Row: Place; Insert: Partial<Place>; Update: Partial<Place> };
       suggestion_feedback: {
         Row: { id: string; user_id: string; entry_id: string; suggestion_id: string; category: string; outcome: SuggestionOutcome; created_at: string };
         Insert: Record<string, unknown>;

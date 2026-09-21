@@ -5,6 +5,7 @@ import { createSubject } from '@/app/subjects/actions';
 
 export default function NewSubjectCard() {
   const [open, setOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
 
   if (!open) {
     return (
@@ -19,8 +20,13 @@ export default function NewSubjectCard() {
     <form
       className="project-card"
       action={async (formData) => {
-        await createSubject(formData);
-        setOpen(false);
+        setCreating(true);
+        try {
+          await createSubject(formData);
+          setOpen(false);
+        } finally {
+          setCreating(false);
+        }
       }}
     >
       <input
@@ -28,15 +34,21 @@ export default function NewSubjectCard() {
         className="text-input"
         placeholder="Project title…"
         autoFocus
+        disabled={creating}
         onKeyDown={(e) => {
           if (e.key === 'Escape') setOpen(false);
         }}
       />
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button type="submit" className="primary-btn" style={{ padding: '6px 14px', fontSize: 13 }}>
-          Create
+        <button
+          type="submit"
+          className="primary-btn"
+          style={{ padding: '6px 14px', fontSize: 13 }}
+          disabled={creating}
+        >
+          {creating ? 'Creating…' : 'Create'}
         </button>
-        <button type="button" className="secondary-btn" onClick={() => setOpen(false)}>
+        <button type="button" className="secondary-btn" onClick={() => setOpen(false)} disabled={creating}>
           Cancel
         </button>
       </div>

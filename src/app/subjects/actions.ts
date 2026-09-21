@@ -27,7 +27,7 @@ export async function createSubject(formData: FormData) {
   // Default sections every Subject ships with, per the locked IA.
   await supabase.from('sections').insert([
     { subject_id: subject.id, type: 'chapters', title: 'Chapters', position: 0 },
-    { subject_id: subject.id, type: 'scribbles', title: 'Scribbles', position: 1 },
+    { subject_id: subject.id, type: 'threads', title: 'Threads', position: 1 },
     { subject_id: subject.id, type: 'research', title: 'Research & Notes', position: 2 },
   ]);
 

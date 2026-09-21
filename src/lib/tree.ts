@@ -33,6 +33,6 @@ export function buildEntryTree(entries: Entry[]): EntryNode[] {
 
 export const SECTION_LABELS: Record<string, string> = {
   chapters: 'Chapters',
-  scribbles: 'Scribbles',
+  threads: 'Threads',
   research: 'Research & Notes',
 };

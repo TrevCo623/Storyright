@@ -1,6 +1,6 @@
 import { redirect, notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import Sidebar from '@/components/Sidebar/Sidebar';
+import AppShell from '@/components/AppShell/AppShell';
 
 export default async function SubjectLayout({
   children,
@@ -34,14 +34,13 @@ export default async function SubjectLayout({
     : { data: [] };
 
   return (
-    <div className="app">
-      <Sidebar
-        subjectId={params.subjectId}
-        subjectTitle={subject.title}
-        sections={sections ?? []}
-        entries={entries ?? []}
-      />
+    <AppShell
+      subjectId={params.subjectId}
+      subjectTitle={subject.title}
+      sections={sections ?? []}
+      entries={entries ?? []}
+    >
       {children}
-    </div>
+    </AppShell>
   );
 }
