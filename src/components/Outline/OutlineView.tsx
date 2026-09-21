@@ -128,7 +128,7 @@ export default function OutlineView({
         <div className="outline-column">
           <h1 className="outline-title">Story outline</h1>
           <p className="outline-subtitle">
-            The master plan for your story — fill in as much as you like now, and it'll fill in
+            The master plan for your story — fill in as much as you like now, and it&rsquo;ll fill in
             more on its own as you write.
           </p>
 
