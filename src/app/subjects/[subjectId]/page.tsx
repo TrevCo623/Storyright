@@ -12,7 +12,7 @@ export default async function SubjectOverviewPage({
 
   const { data: subject } = await supabase
     .from('subjects')
-    .select('id, premise, themes, takeaway, outline_review')
+    .select('id, title, premise, themes, takeaway, outline_review')
     .eq('id', subjectId)
     .single();
   if (!subject) notFound();
@@ -40,6 +40,7 @@ export default async function SubjectOverviewPage({
   return (
     <OutlineView
       subjectId={subjectId}
+      title={subject.title ?? ''}
       chaptersSectionId={chaptersSectionId}
       threadsSectionId={threadsSectionId}
       premise={subject.premise ?? ''}

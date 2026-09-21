@@ -1,11 +1,13 @@
 'use client';
 
-import { useRef, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState, useTransition } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
 import type { Character, Entry, OutlineReview, OutlineSuggestionCategory, Place } from '@/lib/types';
 import { createEntry, deleteEntry } from '@/app/subjects/[subjectId]/actions';
 import {
+  updateSubjectTitle,
   saveStorySummary,
   saveChapterMeta,
   createChapter,
@@ -17,6 +19,16 @@ import {
   updatePlace,
   deletePlace,
 } from '@/app/subjects/[subjectId]/outline/actions';
+
+type OutlineTab = 'chapters' | 'characters' | 'places' | 'threads' | 'overview';
+
+const TABS: { id: OutlineTab; label: string }[] = [
+  { id: 'chapters', label: 'Chapters' },
+  { id: 'characters', label: 'Characters' },
+  { id: 'places', label: 'Places' },
+  { id: 'threads', label: 'Threads' },
+  { id: 'overview', label: 'Summary' },
+];
 
 const CATEGORY_COLOR_VAR: Record<OutlineSuggestionCategory, string> = {
   chapter: 'var(--accent)',
@@ -34,6 +46,7 @@ const CATEGORY_LABEL: Record<OutlineSuggestionCategory, string> = {
 
 interface Props {
   subjectId: string;
+  title: string;
   chaptersSectionId: string | null;
   threadsSectionId: string | null;
   premise: string;
@@ -48,6 +61,7 @@ interface Props {
 
 export default function OutlineView({
   subjectId,
+  title: initialTitle,
   chaptersSectionId,
   threadsSectionId,
   premise: initialPremise,
@@ -60,6 +74,7 @@ export default function OutlineView({
   places: initialPlaces,
 }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [premise, setPremise] = useState(initialPremise);
   const [themes, setThemes] = useState(initialThemes);
@@ -78,12 +93,66 @@ export default function OutlineView({
   const [reviewOpen, setReviewOpen] = useState(false);
   const [, startTransition] = useTransition();
 
+  const initialTabParam = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<OutlineTab>(
+    TABS.some((t) => t.id === initialTabParam) ? (initialTabParam as OutlineTab) : 'chapters'
+  );
+  const [title, setTitle] = useState(initialTitle);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [chaptersDirty, setChaptersDirty] = useState(false);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+
   const dragIndex = useRef<number | null>(null);
+
+  // Nav "+" buttons in the entry-editor sidebar deep-link here with
+  // ?tab=<section>&new=1 to open the matching creation UI, since chapter/
+  // character/place/thread creation all live on the Outline page.
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+    if (activeTab === 'chapters' && chaptersSectionId) setChapterDialogOpen(true);
+    else if (activeTab === 'characters') setAddingCharacter(true);
+    else if (activeTab === 'places') setAddingPlace(true);
+    else if (activeTab === 'threads' && threadsSectionId) {
+      // createEntry redirects server-side to the new entry's editor page, so
+      // skip the router.replace below — it would race the incoming redirect.
+      void createEntry(subjectId, threadsSectionId, null, 'Untitled thread');
+      return;
+    }
+    router.replace(`/subjects/${subjectId}?tab=${activeTab}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function saveSummary(next: { premise: string; themes: string; takeaway: string }) {
     startTransition(() => {
       void saveStorySummary(subjectId, next);
     });
+  }
+
+  function startEditTitle() {
+    setEditingTitle(true);
+    requestAnimationFrame(() => {
+      const node = titleRef.current;
+      if (!node) return;
+      node.focus();
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    });
+  }
+
+  function saveTitle() {
+    const next = titleRef.current?.textContent?.trim() || 'Untitled';
+    setTitle(next);
+    setEditingTitle(false);
+    void updateSubjectTitle(subjectId, next);
+  }
+
+  function cancelEditTitle() {
+    if (titleRef.current) titleRef.current.textContent = title;
+    setEditingTitle(false);
   }
 
   function handleChapterDrop(targetIndex: number) {
@@ -94,6 +163,7 @@ export default function OutlineView({
     const [moved] = next.splice(from, 1);
     next.splice(targetIndex, 0, moved);
     setChapters(next);
+    setChaptersDirty(true);
     void reorderChapters(subjectId, next.map((c) => c.id));
   }
 
@@ -109,6 +179,7 @@ export default function OutlineView({
       if (data.review) {
         setReview(data.review);
         setReviewOpen(true);
+        setChaptersDirty(false);
       }
     } finally {
       setReviewing(false);
@@ -118,7 +189,9 @@ export default function OutlineView({
   return (
     <main className="editor-area outline-area">
       <header className="topbar">
-        <div className="breadcrumb">Outline</div>
+        <Link href="/subjects" className="nav-back-link">
+          ‹ See all projects
+        </Link>
         <div className="topbar-right">
           <ThemeToggle />
         </div>
@@ -126,242 +199,287 @@ export default function OutlineView({
 
       <div className="editor-scroll">
         <div className="outline-column">
-          <h1 className="outline-title">Story outline</h1>
-          <p className="outline-subtitle">
-            The master plan for your story — fill in as much as you like now, and it&rsquo;ll fill in
-            more on its own as you write.
-          </p>
+          <div className="outline-sticky-head">
+            <div className="outline-header-row">
+              <div className={`outline-title-wrap${editingTitle ? ' editing' : ''}`}>
+                <h1
+                  ref={titleRef}
+                  className="outline-title"
+                  contentEditable={editingTitle}
+                  suppressContentEditableWarning
+                  spellCheck={false}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      saveTitle();
+                    } else if (e.key === 'Escape') {
+                      cancelEditTitle();
+                    }
+                  }}
+                >
+                  {title || 'Untitled'}
+                </h1>
+                <button className="title-edit-btn" onClick={startEditTitle}>
+                  Edit
+                </button>
+                <button className="title-save-btn" onClick={saveTitle}>
+                  Save title
+                </button>
+              </div>
+              <button
+                className={`review-btn review-btn-top${chaptersDirty ? ' has-dirty' : ''}${reviewing ? ' loading' : ''}`}
+                onClick={runOutlineReview}
+                disabled={reviewing}
+              >
+                <span className="icon">✦</span>
+                <span>{reviewing ? 'Reviewing…' : 'Review'}</span>
+                <span className="review-dirty-dot" title="Chapter order changed — review to check continuity">
+                  !
+                </span>
+              </button>
+            </div>
 
-          {/* ---------- Story summary ---------- */}
-          <section className="outline-section">
-            <div className="outline-section-header">
-              <h2 className="outline-section-title">Story summary</h2>
+            <div className="outline-tabs">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  className={`outline-tab${activeTab === tab.id ? ' active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
-            <div className="summary-fields">
-              <label className="field-label">What is this story about?</label>
-              <textarea
-                className="manifesto-textarea"
-                value={premise}
-                placeholder="A quick premise — who, what, why now…"
-                onChange={(e) => setPremise(e.target.value)}
-                onBlur={() => saveSummary({ premise, themes, takeaway })}
-              />
-              <label className="field-label" style={{ marginTop: 18 }}>
-                General themes
-              </label>
-              <textarea
-                className="manifesto-textarea"
-                value={themes}
-                placeholder="What ideas or tensions run through it?"
-                onChange={(e) => setThemes(e.target.value)}
-                onBlur={() => saveSummary({ premise, themes, takeaway })}
-                style={{ minHeight: 80 }}
-              />
-              <label className="field-label" style={{ marginTop: 18 }}>
-                Reader takeaway
-              </label>
-              <textarea
-                className="manifesto-textarea"
-                value={takeaway}
-                placeholder="What should the reader feel or understand when they finish?"
-                onChange={(e) => setTakeaway(e.target.value)}
-                onBlur={() => saveSummary({ premise, themes, takeaway })}
-                style={{ minHeight: 80 }}
-              />
-            </div>
-          </section>
+          </div>
+
+          {/* ---------- Summary ---------- */}
+          <div className={`tab-panel${activeTab === 'overview' ? ' active' : ''}`}>
+            <section className="outline-section" style={{ marginTop: 16 }}>
+              <div className="summary-fields">
+                <label className="field-label">What is this story about?</label>
+                <textarea
+                  className="manifesto-textarea"
+                  value={premise}
+                  placeholder="A quick premise — who, what, why now…"
+                  onChange={(e) => setPremise(e.target.value)}
+                  onBlur={() => saveSummary({ premise, themes, takeaway })}
+                />
+                <label className="field-label" style={{ marginTop: 18 }}>
+                  General themes
+                </label>
+                <textarea
+                  className="manifesto-textarea"
+                  value={themes}
+                  placeholder="What ideas or tensions run through it?"
+                  onChange={(e) => setThemes(e.target.value)}
+                  onBlur={() => saveSummary({ premise, themes, takeaway })}
+                  style={{ minHeight: 80 }}
+                />
+                <label className="field-label" style={{ marginTop: 18 }}>
+                  Reader takeaway
+                </label>
+                <textarea
+                  className="manifesto-textarea"
+                  value={takeaway}
+                  placeholder="What should the reader feel or understand when they finish?"
+                  onChange={(e) => setTakeaway(e.target.value)}
+                  onBlur={() => saveSummary({ premise, themes, takeaway })}
+                  style={{ minHeight: 80 }}
+                />
+              </div>
+            </section>
+          </div>
 
           {/* ---------- Chapters ---------- */}
-          <section className="outline-section">
-            <div className="outline-section-header">
-              <h2 className="outline-section-title">Chapters</h2>
-              {chaptersSectionId && (
-                <button className="add-btn" title="New chapter" onClick={() => setChapterDialogOpen(true)}>
-                  +
-                </button>
+          <div className={`tab-panel${activeTab === 'chapters' ? ' active' : ''}`}>
+            <section className="outline-section" style={{ marginTop: 16 }}>
+              {chapters.length === 0 && (
+                <p className="outline-empty">No chapters yet — add your first one below.</p>
               )}
-            </div>
-            {chapters.length === 0 && (
-              <p className="outline-empty">No chapters yet — add your first one above.</p>
-            )}
-            <div className="chapter-list">
-              {chapters.map((chapter, index) => (
-                <ChapterRow
-                  key={chapter.id}
-                  subjectId={subjectId}
-                  chapter={chapter}
-                  index={index}
-                  onDragStart={() => (dragIndex.current = index)}
-                  onDrop={() => handleChapterDrop(index)}
-                  onSaved={(patch) =>
-                    setChapters((prev) =>
-                      prev.map((c) => (c.id === chapter.id ? { ...c, ...patch } : c))
-                    )
-                  }
-                  onDelete={async () => {
-                    await deleteEntry(subjectId, chapter.id);
-                    setChapters((prev) => prev.filter((c) => c.id !== chapter.id));
+              <div className="chapter-list">
+                {chapters.map((chapter, index) => (
+                  <ChapterRow
+                    key={chapter.id}
+                    subjectId={subjectId}
+                    chapter={chapter}
+                    index={index}
+                    onDragStart={() => (dragIndex.current = index)}
+                    onDrop={() => handleChapterDrop(index)}
+                    onSaved={(patch) =>
+                      setChapters((prev) =>
+                        prev.map((c) => (c.id === chapter.id ? { ...c, ...patch } : c))
+                      )
+                    }
+                    onDelete={async () => {
+                      await deleteEntry(subjectId, chapter.id);
+                      setChapters((prev) => prev.filter((c) => c.id !== chapter.id));
+                    }}
+                  />
+                ))}
+              </div>
+              {chapterDialogOpen && chaptersSectionId && (
+                <NewChapterDialog
+                  onCancel={() => setChapterDialogOpen(false)}
+                  onAdd={async (values) => {
+                    const created = await createChapter(subjectId, chaptersSectionId, values);
+                    setChapters((prev) => [...prev, created]);
+                    setChapterDialogOpen(false);
                   }}
                 />
-              ))}
-            </div>
-            {chapterDialogOpen && chaptersSectionId && (
-              <NewChapterDialog
-                onCancel={() => setChapterDialogOpen(false)}
-                onAdd={async (values) => {
-                  const created = await createChapter(subjectId, chaptersSectionId, values);
-                  setChapters((prev) => [...prev, created]);
-                  setChapterDialogOpen(false);
-                }}
-              />
-            )}
-          </section>
+              )}
+            </section>
+          </div>
 
           {/* ---------- Characters ---------- */}
-          <section className="outline-section">
-            <div className="outline-section-header">
-              <h2 className="outline-section-title">Characters</h2>
-              <button className="add-btn" title="New character" onClick={() => setAddingCharacter(true)}>
-                +
-              </button>
-            </div>
-            {addingCharacter && (
-              <EntityForm
-                fields={['name', 'role', 'summary']}
-                onCancel={() => setAddingCharacter(false)}
-                onSubmit={async (values) => {
-                  const created = await createCharacter(subjectId, {
-                    name: values.name,
-                    role: values.role,
-                    summary: values.summary,
-                  });
-                  setCharacters((prev) => [...prev, created]);
-                  setAddingCharacter(false);
-                }}
-              />
-            )}
-            {characters.length === 0 && !addingCharacter && (
-              <p className="outline-empty">
-                No characters yet — add one, or write a chapter and Review will pull them out for you.
-              </p>
-            )}
-            <div className="entity-grid">
-              {characters.map((character) => (
-                <EntityCard
-                  key={character.id}
-                  name={character.name}
-                  role={character.role}
-                  summary={character.summary}
-                  source={character.source}
+          <div className={`tab-panel${activeTab === 'characters' ? ' active' : ''}`}>
+            <section className="outline-section" style={{ marginTop: 16 }}>
+              {addingCharacter && (
+                <EntityForm
                   fields={['name', 'role', 'summary']}
-                  onSave={async (values) => {
-                    await updateCharacter(subjectId, character.id, values);
-                    setCharacters((prev) =>
-                      prev.map((c) => (c.id === character.id ? { ...c, ...values } : c))
-                    );
-                  }}
-                  onDelete={async () => {
-                    await deleteCharacter(subjectId, character.id);
-                    setCharacters((prev) => prev.filter((c) => c.id !== character.id));
+                  onCancel={() => setAddingCharacter(false)}
+                  onSubmit={async (values) => {
+                    const created = await createCharacter(subjectId, {
+                      name: values.name,
+                      role: values.role,
+                      summary: values.summary,
+                    });
+                    setCharacters((prev) => [...prev, created]);
+                    setAddingCharacter(false);
                   }}
                 />
-              ))}
-            </div>
-          </section>
+              )}
+              {characters.length === 0 && !addingCharacter && (
+                <p className="outline-empty">
+                  No characters yet — add one, or write a chapter and Review will pull them out for you.
+                </p>
+              )}
+              <div className="entity-grid">
+                {characters.map((character) => (
+                  <EntityCard
+                    key={character.id}
+                    name={character.name}
+                    role={character.role}
+                    summary={character.summary}
+                    source={character.source}
+                    fields={['name', 'role', 'summary']}
+                    onSave={async (values) => {
+                      await updateCharacter(subjectId, character.id, values);
+                      setCharacters((prev) =>
+                        prev.map((c) => (c.id === character.id ? { ...c, ...values } : c))
+                      );
+                    }}
+                    onDelete={async () => {
+                      await deleteCharacter(subjectId, character.id);
+                      setCharacters((prev) => prev.filter((c) => c.id !== character.id));
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+          </div>
 
           {/* ---------- Places ---------- */}
-          <section className="outline-section">
-            <div className="outline-section-header">
-              <h2 className="outline-section-title">Places</h2>
-              <button className="add-btn" title="New place" onClick={() => setAddingPlace(true)}>
-                +
-              </button>
-            </div>
-            {addingPlace && (
-              <EntityForm
-                fields={['name', 'summary']}
-                onCancel={() => setAddingPlace(false)}
-                onSubmit={async (values) => {
-                  const created = await createPlace(subjectId, {
-                    name: values.name,
-                    summary: values.summary,
-                  });
-                  setPlaces((prev) => [...prev, created]);
-                  setAddingPlace(false);
-                }}
-              />
-            )}
-            {places.length === 0 && !addingPlace && (
-              <p className="outline-empty">
-                No places yet — add one, or write a chapter and Review will pull them out for you.
-              </p>
-            )}
-            <div className="entity-grid">
-              {places.map((place) => (
-                <EntityCard
-                  key={place.id}
-                  name={place.name}
-                  summary={place.summary}
-                  source={place.source}
+          <div className={`tab-panel${activeTab === 'places' ? ' active' : ''}`}>
+            <section className="outline-section" style={{ marginTop: 16 }}>
+              {addingPlace && (
+                <EntityForm
                   fields={['name', 'summary']}
-                  onSave={async (values) => {
-                    await updatePlace(subjectId, place.id, values);
-                    setPlaces((prev) => prev.map((p) => (p.id === place.id ? { ...p, ...values } : p)));
-                  }}
-                  onDelete={async () => {
-                    await deletePlace(subjectId, place.id);
-                    setPlaces((prev) => prev.filter((p) => p.id !== place.id));
+                  onCancel={() => setAddingPlace(false)}
+                  onSubmit={async (values) => {
+                    const created = await createPlace(subjectId, {
+                      name: values.name,
+                      summary: values.summary,
+                    });
+                    setPlaces((prev) => [...prev, created]);
+                    setAddingPlace(false);
                   }}
                 />
-              ))}
-            </div>
-          </section>
+              )}
+              {places.length === 0 && !addingPlace && (
+                <p className="outline-empty">
+                  No places yet — add one, or write a chapter and Review will pull them out for you.
+                </p>
+              )}
+              <div className="entity-grid">
+                {places.map((place) => (
+                  <EntityCard
+                    key={place.id}
+                    name={place.name}
+                    summary={place.summary}
+                    source={place.source}
+                    fields={['name', 'summary']}
+                    onSave={async (values) => {
+                      await updatePlace(subjectId, place.id, values);
+                      setPlaces((prev) => prev.map((p) => (p.id === place.id ? { ...p, ...values } : p)));
+                    }}
+                    onDelete={async () => {
+                      await deletePlace(subjectId, place.id);
+                      setPlaces((prev) => prev.filter((p) => p.id !== place.id));
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+          </div>
 
           {/* ---------- Threads ---------- */}
-          <section className="outline-section">
-            <div className="outline-section-header">
-              <h2 className="outline-section-title">Threads</h2>
-              {threadsSectionId && (
-                <button
-                  className="add-btn"
-                  title="New thread"
-                  onClick={() => void createEntry(subjectId, threadsSectionId, null, 'Untitled thread')}
-                >
-                  +
-                </button>
+          <div className={`tab-panel${activeTab === 'threads' ? ' active' : ''}`}>
+            <section className="outline-section" style={{ marginTop: 16 }}>
+              {threads.length === 0 && (
+                <p className="outline-empty">
+                  A catch-all for anything else — loose ideas, questions, research notes.
+                </p>
               )}
-            </div>
-            {threads.length === 0 && (
-              <p className="outline-empty">
-                A catch-all for anything else — loose ideas, questions, research notes.
-              </p>
-            )}
-            <div className="thread-list">
-              {threads.map((thread) => (
-                <div key={thread.id} className="thread-row">
-                  <button
-                    className="thread-title"
-                    onClick={() => router.push(`/subjects/${subjectId}/entries/${thread.id}`)}
-                  >
-                    {thread.title}
-                  </button>
-                  <button
-                    className="action-btn"
-                    onClick={() => void deleteEntry(subjectId, thread.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
+              <div className="thread-list">
+                {threads.map((thread) => (
+                  <div key={thread.id} className="thread-row">
+                    <button
+                      className="thread-title"
+                      onClick={() => router.push(`/subjects/${subjectId}/entries/${thread.id}`)}
+                    >
+                      {thread.title}
+                    </button>
+                    <button
+                      className="action-btn"
+                      onClick={() => void deleteEntry(subjectId, thread.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
         </div>
       </div>
 
-      <button className={`review-btn${reviewing ? ' loading' : ''}`} onClick={runOutlineReview} disabled={reviewing}>
-        <span className="icon">✦</span>
-        {reviewing ? 'Reviewing…' : 'Review'}
-      </button>
+      {activeTab === 'chapters' && chaptersSectionId && (
+        <button className="review-btn floating-add-btn" onClick={() => setChapterDialogOpen(true)}>
+          <span className="icon">+</span>
+          <span>New Chapter</span>
+        </button>
+      )}
+      {activeTab === 'characters' && (
+        <button className="review-btn floating-add-btn" onClick={() => setAddingCharacter(true)}>
+          <span className="icon">+</span>
+          <span>New Character</span>
+        </button>
+      )}
+      {activeTab === 'places' && (
+        <button className="review-btn floating-add-btn" onClick={() => setAddingPlace(true)}>
+          <span className="icon">+</span>
+          <span>New Place</span>
+        </button>
+      )}
+      {activeTab === 'threads' && threadsSectionId && (
+        <button
+          className="review-btn floating-add-btn"
+          onClick={() => void createEntry(subjectId, threadsSectionId, null, 'Untitled thread')}
+        >
+          <span className="icon">+</span>
+          <span>New Thread</span>
+        </button>
+      )}
 
       {reviewOpen && review && (
         <div className="advice-overlay" onClick={() => setReviewOpen(false)}>

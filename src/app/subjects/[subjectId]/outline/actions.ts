@@ -5,6 +5,16 @@ import { revalidatePath } from 'next/cache';
 import type { ExtractedEntity } from '@/lib/claude';
 import { emptySuggestionState } from '@/lib/types';
 
+// ---------- Title ----------
+
+export async function updateSubjectTitle(subjectId: string, title: string) {
+  const supabase = createClient();
+  const next = title.trim() || 'Untitled';
+  await supabase.from('subjects').update({ title: next }).eq('id', subjectId);
+  revalidatePath(`/subjects/${subjectId}`);
+  revalidatePath('/subjects');
+}
+
 // ---------- Story summary ----------
 
 export async function saveStorySummary(

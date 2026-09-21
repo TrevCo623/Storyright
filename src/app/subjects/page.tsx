@@ -1,7 +1,8 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import NewSubjectCard from '@/components/NewSubjectCard';
+import NewProjectButton from '@/components/NewProjectButton';
+import ProjectCard from '@/components/ProjectCard';
 import ThemeToggle from '@/components/ThemeToggle';
 
 function relativeTime(iso: string) {
@@ -41,26 +42,20 @@ export default async function SubjectsPage() {
   return (
     <div className="picker-wrap">
       <div className="picker-header">
-        <div className="brand">storyright</div>
-        <div className="picker-header-right">
-          <ThemeToggle />
-          <form action="/auth/signout" method="post">
-            <button type="submit" className="secondary-btn">
-              Sign out
-            </button>
-          </form>
-        </div>
+        <div className="picker-brand-wordmark">Storyright</div>
+        <NewProjectButton />
       </div>
-
-      <p className="picker-title">Your projects</p>
 
       {subjects && subjects.length > 0 ? (
         <div className="picker-grid">
           {subjects.map((s) => (
-            <Link key={s.id} href={`/subjects/${s.id}`} className="project-card">
-              <div className="project-card-title">{s.title}</div>
-              <div className="project-card-meta">Edited {relativeTime(s.updated_at)}</div>
-            </Link>
+            <ProjectCard
+              key={s.id}
+              id={s.id}
+              title={s.title}
+              meta={`Edited ${relativeTime(s.updated_at)}`}
+              summary={s.premise}
+            />
           ))}
           <NewSubjectCard />
         </div>
@@ -69,6 +64,15 @@ export default async function SubjectsPage() {
           <NewSubjectCard />
         </div>
       )}
+
+      <div className="picker-footer-controls">
+        <ThemeToggle />
+        <form action="/auth/signout" method="post">
+          <button type="submit" className="picker-logout-btn">
+            Log out
+          </button>
+        </form>
+      </div>
     </div>
   );
 }

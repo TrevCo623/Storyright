@@ -1,10 +1,13 @@
-import { redirect, notFound } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import AppShell from '@/components/AppShell/AppShell';
 
+// The prototype's Outline page has no left nav at all — just a
+// "‹ See all projects" back-link in the topbar. The accordion project nav
+// only exists inside the chapter/entry editor. So this layout (shared by
+// both the Outline route and the entries/[entryId] route) does auth only;
+// the nav is scoped to entries/[entryId]/layout.tsx instead.
 export default async function SubjectLayout({
   children,
-  params,
 }: {
   children: React.ReactNode;
   params: { subjectId: string };
@@ -15,32 +18,5 @@ export default async function SubjectLayout({
   } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: subject } = await supabase
-    .from('subjects')
-    .select('*')
-    .eq('id', params.subjectId)
-    .single();
-  if (!subject) notFound();
-
-  const { data: sections } = await supabase
-    .from('sections')
-    .select('*')
-    .eq('subject_id', params.subjectId)
-    .order('position');
-
-  const sectionIds = (sections ?? []).map((s) => s.id);
-  const { data: entries } = sectionIds.length
-    ? await supabase.from('entries').select('*').in('section_id', sectionIds).order('position')
-    : { data: [] };
-
-  return (
-    <AppShell
-      subjectId={params.subjectId}
-      subjectTitle={subject.title}
-      sections={sections ?? []}
-      entries={entries ?? []}
-    >
-      {children}
-    </AppShell>
-  );
+  return <>{children}</>;
 }

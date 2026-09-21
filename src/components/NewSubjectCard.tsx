@@ -10,15 +10,15 @@ export default function NewSubjectCard() {
   if (!open) {
     return (
       <button className="project-card new-project-card" onClick={() => setOpen(true)}>
-        <div className="new-project-plus">+</div>
-        <div className="project-card-title">New project</div>
+        <div className="new-project-title">New project</div>
+        <div className="new-project-circle">+</div>
       </button>
     );
   }
 
   return (
     <form
-      className="project-card"
+      className="project-card new-project-form"
       action={async (formData) => {
         setCreating(true);
         try {

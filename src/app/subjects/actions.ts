@@ -34,3 +34,10 @@ export async function createSubject(formData: FormData) {
   revalidatePath('/subjects');
   redirect(`/subjects/${subject.id}`);
 }
+
+export async function deleteSubject(subjectId: string) {
+  const supabase = createClient();
+  // Cascades to sections/entries/characters/places via FK constraints.
+  await supabase.from('subjects').delete().eq('id', subjectId);
+  revalidatePath('/subjects');
+}

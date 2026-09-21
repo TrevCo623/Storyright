@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
 import ThemeToggle from '@/components/ThemeToggle';
+import { useNav } from '@/components/AppShell/NavContext';
 import {
   SuggestionHighlight,
   setSuggestionDecorations,
@@ -23,6 +24,7 @@ import type { AdviceMessage, Entry, SuggestionCategory, SuggestionDef, Suggestio
 interface Props {
   subjectId: string;
   entry: Entry;
+  sectionLabel: string;
 }
 
 interface RawSuggestionWithId {
@@ -49,7 +51,8 @@ function wordCount(text: string): number {
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
-export default function EntryEditor({ subjectId, entry }: Props) {
+export default function EntryEditor({ subjectId, entry, sectionLabel }: Props) {
+  const { navOpen, toggleNav } = useNav();
   const [title, setTitle] = useState(entry.title);
   const titleRef = useRef(entry.title);
   useEffect(() => {
@@ -443,18 +446,38 @@ export default function EntryEditor({ subjectId, entry }: Props) {
     <>
       <main className="editor-area">
         <header className="topbar">
-          <div className="breadcrumb">Editing</div>
+          <div className="topbar-left">
+            <button
+              className={`icon-btn${navOpen ? '' : ' active'}`}
+              title={navOpen ? 'Close chapter list' : 'Open chapter list'}
+              onClick={toggleNav}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                <rect x="1.85" y="3.15" width="4.35" height="9.7" rx="0.5" fill="currentColor" />
+              </svg>
+            </button>
+            <div className="breadcrumb">
+              {sectionLabel} / {title || 'Untitled'}
+            </div>
+          </div>
           <div className="topbar-right">
             <span className="meta">
               {liveWordCount} words · {readingTime} min read
             </span>
+            <button className="icon-btn" title="Search this project" onClick={() => setToast('Project search is coming soon')}>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="6.8" cy="6.8" r="4.3" stroke="currentColor" strokeWidth="1.3" />
+                <line x1="10.1" y1="10.1" x2="13.6" y2="13.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+              </svg>
+            </button>
             <ThemeToggle />
             <button className="icon-btn" title="Export as Markdown" onClick={exportMarkdown}>
               ⬇
             </button>
             <button
-              className={`icon-btn${railOpen ? ' active' : ''}`}
-              title="Toggle suggestions"
+              className={`icon-btn${railOpen ? '' : ' active'}`}
+              title={railOpen ? 'Close suggestions sidebar' : 'Open suggestions sidebar'}
               onClick={() => setRailOpen((v) => !v)}
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -485,7 +508,7 @@ export default function EntryEditor({ subjectId, entry }: Props) {
             </button>
           )}
         </div>
-        <button className={`review-btn${reviewing ? ' loading' : ''}`} onClick={runReview} disabled={reviewing}>
+        <button className={`review-btn review-btn-float${reviewing ? ' loading' : ''}`} onClick={runReview} disabled={reviewing}>
           <span className="icon">✦</span>
           {reviewing ? 'Reviewing…' : 'Review'}
         </button>
