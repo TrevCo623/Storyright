@@ -20,12 +20,16 @@ alter table public.entries
   add column if not exists target_feeling text not null default '';
 
 -- ---------- sections: rename 'scribbles' -> 'threads' ----------
+-- Drop the old constraint, migrate existing rows, THEN add the new
+-- constraint — adding it before the data migration rejects any row still
+-- tagged 'scribbles' since that value is no longer in the allowed list.
 alter table public.sections drop constraint if exists sections_type_check;
-alter table public.sections
-  add constraint sections_type_check check (type in ('chapters', 'threads', 'research', 'custom'));
 
 update public.sections set type = 'threads', title = 'Threads'
   where type = 'scribbles';
+
+alter table public.sections
+  add constraint sections_type_check check (type in ('chapters', 'threads', 'research', 'custom'));
 
 -- ---------- characters ----------
 -- Project-level source of truth. Manually authored from the Outline page,
