@@ -187,7 +187,8 @@ export default function OutlineView({
   }
 
   return (
-    <main className="editor-area outline-area">
+    <div className="app">
+      <main className="editor-area outline-area">
       <header className="topbar">
         <Link href="/subjects" className="nav-back-link">
           ‹ See all projects
@@ -508,7 +509,8 @@ export default function OutlineView({
           </div>
         </div>
       )}
-    </main>
+      </main>
+    </div>
   );
 }
 

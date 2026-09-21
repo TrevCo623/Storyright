@@ -293,12 +293,9 @@ a { color: inherit; }
   margin-bottom: 8px;
 }
 .picker-brand-wordmark {
-  font-family: var(--font-ui);
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-primary);
+  height: 15px;
+  width: auto;
+  display: block;
 }
 .picker-header-right { display: flex; align-items: center; gap: 10px; }
 .picker-new-btn {
@@ -346,11 +343,10 @@ a { color: inherit; }
   gap: 20px;
   height: 260px;
   box-sizing: border-box;
-  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 24px 20px;
   background: var(--bg-elevated);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition: background 0.15s ease;
   cursor: pointer;
   text-align: left;
   text-decoration: none;
@@ -358,7 +354,7 @@ a { color: inherit; }
   overflow: hidden;
   color: inherit;
 }
-.project-card:hover { border-color: var(--accent); }
+.project-card:hover { background: var(--bg-hover); }
 .project-card-top { display: flex; flex-direction: column; gap: 4px; }
 .project-card-title {
   font-family: var(--font-editor);
@@ -417,11 +413,11 @@ a { color: inherit; }
   align-items: center;
   justify-content: center;
   gap: 16px;
-  border-style: dashed;
+  border: 1px dashed var(--border);
   color: var(--text-tertiary);
   background: transparent;
 }
-.new-project-card:hover { color: var(--accent-text); border-color: var(--accent); background: var(--bg-hover); }
+.new-project-card:hover { background: var(--bg-hover); }
 .new-project-title {
   font-family: var(--font-editor);
   font-size: 17px;
