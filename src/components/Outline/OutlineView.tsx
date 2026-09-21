@@ -4,8 +4,10 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import TrashIcon from '@/components/icons/TrashIcon';
 import type { Character, Entry, OutlineReview, OutlineSuggestionCategory, Place } from '@/lib/types';
-import { createEntry, deleteEntry } from '@/app/subjects/[subjectId]/actions';
+import { createEntry, deleteEntry, renameEntry } from '@/app/subjects/[subjectId]/actions';
 import {
   updateSubjectTitle,
   saveStorySummary,
@@ -29,6 +31,17 @@ const TABS: { id: OutlineTab; label: string }[] = [
   { id: 'threads', label: 'Threads' },
   { id: 'overview', label: 'Summary' },
 ];
+
+// Floating "New X" pill, bottom-right of the outline area — shown per active
+// tab, same as the prototype's single floatingAddBtn + ADD_LABELS map. It's
+// the *only* way to add a character/place/thread once that tab's grid is
+// non-empty (no persistent add-tile there, unlike chapters).
+const FLOATING_ADD_LABELS: Partial<Record<OutlineTab, string>> = {
+  chapters: 'New Chapter',
+  characters: 'New Character',
+  places: 'New Place',
+  threads: 'New Thread',
+};
 
 const CATEGORY_COLOR_VAR: Record<OutlineSuggestionCategory, string> = {
   chapter: 'var(--accent)',
@@ -85,8 +98,22 @@ export default function OutlineView({
   const [places, setPlaces] = useState(initialPlaces);
 
   const [addingCharacter, setAddingCharacter] = useState(false);
+  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
   const [addingPlace, setAddingPlace] = useState(false);
+  const [editingPlace, setEditingPlace] = useState<Place | null>(null);
+  const [addingThread, setAddingThread] = useState(false);
+  const [editingThread, setEditingThread] = useState<Entry | null>(null);
   const [chapterDialogOpen, setChapterDialogOpen] = useState(false);
+
+  // Single shared delete-confirmation overlay — mirrors the prototype's one
+  // showConfirmDialog() used for every delete flow (chapters/characters/
+  // places/threads), instead of the browser's native window.confirm().
+  const [confirmDialog, setConfirmDialog] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    onConfirm: () => void;
+  } | null>(null);
 
   const [review, setReview] = useState(outlineReview);
   const [reviewing, setReviewing] = useState(false);
@@ -102,7 +129,20 @@ export default function OutlineView({
   const [chaptersDirty, setChaptersDirty] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
 
-  const dragIndex = useRef<number | null>(null);
+  // Chapter reordering — a custom mouse-driven drag (not native HTML5 DnD) so
+  // the grab cursor and drop-slot placeholder stay under our control for the
+  // whole press-and-hold gesture, matching the prototype's reorder feel.
+  const chapterRowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [chapterDrag, setChapterDrag] = useState<{ id: string; overIndex: number } | null>(null);
+  // The drop-slot's open/close is a real height+opacity CSS transition, like the
+  // prototype's — which means it needs to mount at height 0 first and only get
+  // the `.active` class a frame later, or the browser has nothing to transition
+  // from and the slot just pops in at full size instantly.
+  const [dropSlotEntered, setDropSlotEntered] = useState(false);
+  const chapterDragMeta = useRef<{ id: string; overIndex: number; lastY: number | null; rafId: number | null } | null>(
+    null
+  );
+  const [justDroppedChapterId, setJustDroppedChapterId] = useState<string | null>(null);
 
   // Nav "+" buttons in the entry-editor sidebar deep-link here with
   // ?tab=<section>&new=1 to open the matching creation UI, since chapter/
@@ -112,12 +152,7 @@ export default function OutlineView({
     if (activeTab === 'chapters' && chaptersSectionId) setChapterDialogOpen(true);
     else if (activeTab === 'characters') setAddingCharacter(true);
     else if (activeTab === 'places') setAddingPlace(true);
-    else if (activeTab === 'threads' && threadsSectionId) {
-      // createEntry redirects server-side to the new entry's editor page, so
-      // skip the router.replace below — it would race the incoming redirect.
-      void createEntry(subjectId, threadsSectionId, null, 'Untitled thread');
-      return;
-    }
+    else if (activeTab === 'threads' && threadsSectionId) setAddingThread(true);
     router.replace(`/subjects/${subjectId}?tab=${activeTab}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -155,17 +190,117 @@ export default function OutlineView({
     setEditingTitle(false);
   }
 
-  function handleChapterDrop(targetIndex: number) {
-    const from = dragIndex.current;
-    dragIndex.current = null;
-    if (from === null || from === targetIndex) return;
-    const next = chapters.slice();
-    const [moved] = next.splice(from, 1);
-    next.splice(targetIndex, 0, moved);
+  function commitChapterReorder(chapterId: string, overIndex: number, others: Entry[]) {
+    const fromIndex = chapters.findIndex((c) => c.id === chapterId);
+    const dragged = chapters[fromIndex];
+    if (!dragged) return;
+    const next = others.slice();
+    next.splice(overIndex, 0, dragged);
+    const targetIndex = next.findIndex((c) => c.id === chapterId);
     setChapters(next);
-    setChaptersDirty(true);
-    void reorderChapters(subjectId, next.map((c) => c.id));
+    if (targetIndex !== fromIndex) {
+      setChaptersDirty(true);
+      void reorderChapters(subjectId, next.map((c) => c.id));
+    }
+    setJustDroppedChapterId(chapterId);
   }
+
+  function startChapterDrag(chapter: Entry, index: number, e: React.MouseEvent) {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest('.chapter-row.is-editing')) return;
+    e.preventDefault();
+    const row = chapterRowRefs.current.get(chapter.id);
+    if (!row) return;
+
+    const rect = row.getBoundingClientRect();
+    const offsetX = e.clientX - rect.left;
+    const offsetY = e.clientY - rect.top;
+    row.style.width = `${rect.width}px`;
+    row.style.left = `${rect.left}px`;
+    row.style.top = `${rect.top}px`;
+    row.classList.add('chapter-drag-ghost');
+    document.body.classList.add('is-reordering');
+
+    const others = chapters.filter((c) => c.id !== chapter.id);
+    const scrollEl = document.querySelector('.editor-scroll') as HTMLElement | null;
+    chapterDragMeta.current = { id: chapter.id, overIndex: index, lastY: e.clientY, rafId: null };
+    setChapterDrag({ id: chapter.id, overIndex: index });
+    setDropSlotEntered(false);
+    requestAnimationFrame(() => setDropSlotEntered(true));
+
+    function computeOverIndex(clientY: number) {
+      for (let i = 0; i < others.length; i++) {
+        const r = chapterRowRefs.current.get(others[i].id);
+        if (!r) continue;
+        const rr = r.getBoundingClientRect();
+        if (clientY < rr.top + rr.height / 2) return i;
+      }
+      return others.length;
+    }
+
+    function applyOverIndex(idx: number) {
+      if (chapterDragMeta.current && chapterDragMeta.current.overIndex !== idx) {
+        chapterDragMeta.current.overIndex = idx;
+        setChapterDrag({ id: chapter.id, overIndex: idx });
+      }
+    }
+
+    function onMove(ev: MouseEvent) {
+      row!.style.left = `${ev.clientX - offsetX}px`;
+      row!.style.top = `${ev.clientY - offsetY}px`;
+      if (chapterDragMeta.current) chapterDragMeta.current.lastY = ev.clientY;
+      applyOverIndex(computeOverIndex(ev.clientY));
+    }
+
+    // While the cursor holds near the top/bottom edge of the scroll viewport,
+    // mousemove alone won't keep firing — this rAF loop nudges the container's
+    // scroll position each frame so the drag can reach chapters off-screen.
+    function autoScrollTick() {
+      if (!chapterDragMeta.current) return;
+      const lastY = chapterDragMeta.current.lastY;
+      if (lastY !== null && scrollEl) {
+        const bounds = scrollEl.getBoundingClientRect();
+        const edge = 80;
+        const maxSpeed = 9;
+        let delta = 0;
+        const distFromTop = lastY - bounds.top;
+        const distFromBottom = bounds.bottom - lastY;
+        if (distFromTop < edge && distFromTop >= 0) delta = -maxSpeed * (1 - distFromTop / edge);
+        else if (distFromBottom < edge && distFromBottom >= 0) delta = maxSpeed * (1 - distFromBottom / edge);
+        if (delta !== 0) {
+          scrollEl.scrollTop += delta;
+          applyOverIndex(computeOverIndex(lastY));
+        }
+      }
+      chapterDragMeta.current.rafId = requestAnimationFrame(autoScrollTick);
+    }
+    chapterDragMeta.current.rafId = requestAnimationFrame(autoScrollTick);
+
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.classList.remove('is-reordering');
+      row!.classList.remove('chapter-drag-ghost');
+      row!.style.width = '';
+      row!.style.left = '';
+      row!.style.top = '';
+      const meta = chapterDragMeta.current;
+      if (meta?.rafId != null) cancelAnimationFrame(meta.rafId);
+      chapterDragMeta.current = null;
+      setChapterDrag(null);
+      setDropSlotEntered(false);
+      commitChapterReorder(chapter.id, meta?.overIndex ?? index, others);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  useEffect(() => {
+    if (!justDroppedChapterId) return;
+    const t = setTimeout(() => setJustDroppedChapterId(null), 2000);
+    return () => clearTimeout(t);
+  }, [justDroppedChapterId]);
 
   async function runOutlineReview() {
     setReviewing(true);
@@ -302,25 +437,64 @@ export default function OutlineView({
                   </button>
                 ) : (
                   <>
-                    {chapters.map((chapter, index) => (
-                      <ChapterRow
-                        key={chapter.id}
-                        subjectId={subjectId}
-                        chapter={chapter}
-                        index={index}
-                        onDragStart={() => (dragIndex.current = index)}
-                        onDrop={() => handleChapterDrop(index)}
-                        onSaved={(patch) =>
-                          setChapters((prev) =>
-                            prev.map((c) => (c.id === chapter.id ? { ...c, ...patch } : c))
-                          )
+                    {(() => {
+                      const draggingId = chapterDrag?.id ?? null;
+                      const overIndex = chapterDrag?.overIndex ?? null;
+                      const nodes: React.ReactNode[] = [];
+                      let otherIdx = 0;
+                      chapters.forEach((chapter, index) => {
+                        const isDragging = chapter.id === draggingId;
+                        if (draggingId !== null && overIndex === otherIdx && !isDragging) {
+                          nodes.push(
+                            <div
+                              key="chapter-drop-slot"
+                              className={`chapter-drop-slot${dropSlotEntered ? ' active' : ''}`}
+                            />
+                          );
                         }
-                        onDelete={async () => {
-                          await deleteEntry(subjectId, chapter.id);
-                          setChapters((prev) => prev.filter((c) => c.id !== chapter.id));
-                        }}
-                      />
-                    ))}
+                        nodes.push(
+                          <ChapterRow
+                            key={chapter.id}
+                            subjectId={subjectId}
+                            chapter={chapter}
+                            index={index}
+                            registerRef={(el) => {
+                              if (el) chapterRowRefs.current.set(chapter.id, el);
+                              else chapterRowRefs.current.delete(chapter.id);
+                            }}
+                            onGrabHandle={(e) => startChapterDrag(chapter, index, e)}
+                            dimmed={draggingId !== null && !isDragging}
+                            justDropped={justDroppedChapterId === chapter.id}
+                            onSaved={(patch) =>
+                              setChapters((prev) =>
+                                prev.map((c) => (c.id === chapter.id ? { ...c, ...patch } : c))
+                              )
+                            }
+                            onRequestDelete={() =>
+                              setConfirmDialog({
+                                title: 'Delete this chapter?',
+                                message: `"${chapter.title || 'Untitled chapter'}" will be removed from your outline. This can't be undone.`,
+                                confirmLabel: 'Delete',
+                                onConfirm: () => {
+                                  void deleteEntry(subjectId, chapter.id);
+                                  setChapters((prev) => prev.filter((c) => c.id !== chapter.id));
+                                },
+                              })
+                            }
+                          />
+                        );
+                        if (!isDragging) otherIdx++;
+                      });
+                      if (draggingId !== null && overIndex === otherIdx) {
+                        nodes.push(
+                          <div
+                            key="chapter-drop-slot"
+                            className={`chapter-drop-slot${dropSlotEntered ? ' active' : ''}`}
+                          />
+                        );
+                      }
+                      return nodes;
+                    })()}
                     <button className="chapter-add-tile" onClick={() => setChapterDialogOpen(true)}>
                       <span className="chapter-add-tile-circle">+</span>
                       <span>Add a new chapter</span>
@@ -345,8 +519,10 @@ export default function OutlineView({
           <div className={`tab-panel${activeTab === 'characters' ? ' active' : ''}`}>
             <section className="outline-section" style={{ marginTop: 16 }}>
               {addingCharacter && (
-                <EntityForm
+                <EntityDialog
+                  title="New character"
                   fields={['name', 'role', 'summary']}
+                  submitLabel="Add"
                   onCancel={() => setAddingCharacter(false)}
                   onSubmit={async (values) => {
                     const created = await createCharacter(subjectId, {
@@ -359,8 +535,28 @@ export default function OutlineView({
                   }}
                 />
               )}
+              {editingCharacter && (
+                <EntityDialog
+                  title="Edit character"
+                  fields={['name', 'role', 'summary']}
+                  submitLabel="Save"
+                  initial={{
+                    name: editingCharacter.name,
+                    role: editingCharacter.role,
+                    summary: editingCharacter.summary,
+                  }}
+                  onCancel={() => setEditingCharacter(null)}
+                  onSubmit={async (values) => {
+                    await updateCharacter(subjectId, editingCharacter.id, values);
+                    setCharacters((prev) =>
+                      prev.map((c) => (c.id === editingCharacter.id ? { ...c, ...values } : c))
+                    );
+                    setEditingCharacter(null);
+                  }}
+                />
+              )}
               <div className="entity-grid">
-                {characters.length === 0 && !addingCharacter ? (
+                {characters.length === 0 ? (
                   <button className="empty-tile" onClick={() => setAddingCharacter(true)}>
                     <div className="empty-tile-title">Tell us who brings your story to life.</div>
                     <div className="empty-tile-circle">+</div>
@@ -373,17 +569,19 @@ export default function OutlineView({
                       role={character.role}
                       summary={character.summary}
                       source={character.source}
-                      fields={['name', 'role', 'summary']}
-                      onSave={async (values) => {
-                        await updateCharacter(subjectId, character.id, values);
-                        setCharacters((prev) =>
-                          prev.map((c) => (c.id === character.id ? { ...c, ...values } : c))
-                        );
-                      }}
-                      onDelete={async () => {
-                        await deleteCharacter(subjectId, character.id);
-                        setCharacters((prev) => prev.filter((c) => c.id !== character.id));
-                      }}
+                      typeLabel="character"
+                      onEdit={() => setEditingCharacter(character)}
+                      onRequestDelete={() =>
+                        setConfirmDialog({
+                          title: 'Delete this character?',
+                          message: `"${character.name || 'Untitled'}" will be removed from your outline. This can't be undone.`,
+                          confirmLabel: 'Delete',
+                          onConfirm: async () => {
+                            await deleteCharacter(subjectId, character.id);
+                            setCharacters((prev) => prev.filter((c) => c.id !== character.id));
+                          },
+                        })
+                      }
                     />
                   ))
                 )}
@@ -395,8 +593,10 @@ export default function OutlineView({
           <div className={`tab-panel${activeTab === 'places' ? ' active' : ''}`}>
             <section className="outline-section" style={{ marginTop: 16 }}>
               {addingPlace && (
-                <EntityForm
+                <EntityDialog
+                  title="New place"
                   fields={['name', 'summary']}
+                  submitLabel="Add"
                   onCancel={() => setAddingPlace(false)}
                   onSubmit={async (values) => {
                     const created = await createPlace(subjectId, {
@@ -408,8 +608,24 @@ export default function OutlineView({
                   }}
                 />
               )}
+              {editingPlace && (
+                <EntityDialog
+                  title="Edit place"
+                  fields={['name', 'summary']}
+                  submitLabel="Save"
+                  initial={{ name: editingPlace.name, summary: editingPlace.summary }}
+                  onCancel={() => setEditingPlace(null)}
+                  onSubmit={async (values) => {
+                    await updatePlace(subjectId, editingPlace.id, values);
+                    setPlaces((prev) =>
+                      prev.map((p) => (p.id === editingPlace.id ? { ...p, ...values } : p))
+                    );
+                    setEditingPlace(null);
+                  }}
+                />
+              )}
               <div className="entity-grid">
-                {places.length === 0 && !addingPlace ? (
+                {places.length === 0 ? (
                   <button className="empty-tile" onClick={() => setAddingPlace(true)}>
                     <div className="empty-tile-title">Show us where your story unfolds.</div>
                     <div className="empty-tile-circle">+</div>
@@ -421,15 +637,19 @@ export default function OutlineView({
                       name={place.name}
                       summary={place.summary}
                       source={place.source}
-                      fields={['name', 'summary']}
-                      onSave={async (values) => {
-                        await updatePlace(subjectId, place.id, values);
-                        setPlaces((prev) => prev.map((p) => (p.id === place.id ? { ...p, ...values } : p)));
-                      }}
-                      onDelete={async () => {
-                        await deletePlace(subjectId, place.id);
-                        setPlaces((prev) => prev.filter((p) => p.id !== place.id));
-                      }}
+                      typeLabel="place"
+                      onEdit={() => setEditingPlace(place)}
+                      onRequestDelete={() =>
+                        setConfirmDialog({
+                          title: 'Delete this place?',
+                          message: `"${place.name || 'Untitled'}" will be removed from your outline. This can't be undone.`,
+                          confirmLabel: 'Delete',
+                          onConfirm: async () => {
+                            await deletePlace(subjectId, place.id);
+                            setPlaces((prev) => prev.filter((p) => p.id !== place.id));
+                          },
+                        })
+                      }
                     />
                   ))
                 )}
@@ -440,15 +660,43 @@ export default function OutlineView({
           {/* ---------- Threads ---------- */}
           <div className={`tab-panel${activeTab === 'threads' ? ' active' : ''}`}>
             <section className="outline-section" style={{ marginTop: 16 }}>
-              <div className="thread-list">
+              {addingThread && (
+                <EntityDialog
+                  title="New thread"
+                  fields={['name', 'summary']}
+                  submitLabel="Add"
+                  onCancel={() => setAddingThread(false)}
+                  onSubmit={async (values) => {
+                    if (!threadsSectionId) return;
+                    // createEntry redirects server-side into the new thread's
+                    // full editor once saved, matching how "Write" works for
+                    // chapters — threads carry real long-form content, unlike
+                    // the prototype's static demo objects.
+                    await createEntry(subjectId, threadsSectionId, null, values.name);
+                  }}
+                />
+              )}
+              {editingThread && (
+                <EntityDialog
+                  title="Edit thread"
+                  fields={['name', 'summary']}
+                  submitLabel="Save"
+                  initial={{ name: editingThread.title, summary: editingThread.synopsis }}
+                  onCancel={() => setEditingThread(null)}
+                  onSubmit={async (values) => {
+                    await renameEntry(subjectId, editingThread.id, values.name);
+                    await saveChapterMeta(subjectId, editingThread.id, {
+                      synopsis: values.summary ?? '',
+                      target_feeling: editingThread.target_feeling,
+                    });
+                    setEditingThread(null);
+                    router.refresh();
+                  }}
+                />
+              )}
+              <div className="entity-grid">
                 {threads.length === 0 ? (
-                  <button
-                    className="empty-tile"
-                    onClick={() =>
-                      threadsSectionId &&
-                      void createEntry(subjectId, threadsSectionId, null, 'Untitled thread')
-                    }
-                  >
+                  <button className="empty-tile" onClick={() => setAddingThread(true)}>
                     <div className="empty-tile-title">Track the threads that tie it all together.</div>
                     <div className="empty-tile-desc">
                       A place for unfinished thoughts, ideas, and loose threads that you&rsquo;re not
@@ -458,20 +706,22 @@ export default function OutlineView({
                   </button>
                 ) : (
                   threads.map((thread) => (
-                    <div key={thread.id} className="thread-row">
-                      <button
-                        className="thread-title"
-                        onClick={() => router.push(`/subjects/${subjectId}/entries/${thread.id}`)}
-                      >
-                        {thread.title}
-                      </button>
-                      <button
-                        className="action-btn"
-                        onClick={() => void deleteEntry(subjectId, thread.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
+                    <EntityCard
+                      key={thread.id}
+                      name={thread.title}
+                      summary={thread.synopsis}
+                      source="manual"
+                      typeLabel="thread"
+                      onEdit={() => setEditingThread(thread)}
+                      onRequestDelete={() =>
+                        setConfirmDialog({
+                          title: 'Delete this thread?',
+                          message: `"${thread.title || 'Untitled'}" will be removed from your outline. This can't be undone.`,
+                          confirmLabel: 'Delete',
+                          onConfirm: () => void deleteEntry(subjectId, thread.id),
+                        })
+                      }
+                    />
                   ))
                 )}
               </div>
@@ -479,34 +729,6 @@ export default function OutlineView({
           </div>
         </div>
       </div>
-
-      {activeTab === 'chapters' && chaptersSectionId && (
-        <button className="review-btn floating-add-btn" onClick={() => setChapterDialogOpen(true)}>
-          <span className="icon">+</span>
-          <span>New Chapter</span>
-        </button>
-      )}
-      {activeTab === 'characters' && (
-        <button className="review-btn floating-add-btn" onClick={() => setAddingCharacter(true)}>
-          <span className="icon">+</span>
-          <span>New Character</span>
-        </button>
-      )}
-      {activeTab === 'places' && (
-        <button className="review-btn floating-add-btn" onClick={() => setAddingPlace(true)}>
-          <span className="icon">+</span>
-          <span>New Place</span>
-        </button>
-      )}
-      {activeTab === 'threads' && threadsSectionId && (
-        <button
-          className="review-btn floating-add-btn"
-          onClick={() => void createEntry(subjectId, threadsSectionId, null, 'Untitled thread')}
-        >
-          <span className="icon">+</span>
-          <span>New Thread</span>
-        </button>
-      )}
 
       {reviewOpen && review && (
         <div className="advice-overlay" onClick={() => setReviewOpen(false)}>
@@ -535,6 +757,34 @@ export default function OutlineView({
           </div>
         </div>
       )}
+
+      {confirmDialog && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          onCancel={() => setConfirmDialog(null)}
+          onConfirm={() => {
+            confirmDialog.onConfirm();
+            setConfirmDialog(null);
+          }}
+        />
+      )}
+
+      {FLOATING_ADD_LABELS[activeTab] && (
+        <button
+          className="review-btn floating-add-btn"
+          onClick={() => {
+            if (activeTab === 'chapters') { if (chaptersSectionId) setChapterDialogOpen(true); }
+            else if (activeTab === 'characters') setAddingCharacter(true);
+            else if (activeTab === 'places') setAddingPlace(true);
+            else if (activeTab === 'threads') { if (threadsSectionId) setAddingThread(true); }
+          }}
+        >
+          <span className="icon">+</span>
+          <span>{FLOATING_ADD_LABELS[activeTab]}</span>
+        </button>
+      )}
       </main>
     </div>
   );
@@ -544,25 +794,28 @@ function ChapterRow({
   subjectId,
   chapter,
   index,
-  onDragStart,
-  onDrop,
+  registerRef,
+  onGrabHandle,
+  dimmed,
+  justDropped,
   onSaved,
-  onDelete,
+  onRequestDelete,
 }: {
   subjectId: string;
   chapter: Entry;
   index: number;
-  onDragStart: () => void;
-  onDrop: () => void;
+  registerRef: (el: HTMLDivElement | null) => void;
+  onGrabHandle: (e: React.MouseEvent) => void;
+  dimmed: boolean;
+  justDropped: boolean;
   onSaved: (patch: { title: string; synopsis: string; target_feeling: string }) => void;
-  onDelete: () => Promise<void>;
+  onRequestDelete: () => void;
 }) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [title, setTitle] = useState(chapter.title);
   const [synopsis, setSynopsis] = useState(chapter.synopsis);
   const [feeling, setFeeling] = useState(chapter.target_feeling);
-  const [dragOver, setDragOver] = useState(false);
 
   function openChapter() {
     router.push(`/subjects/${subjectId}/entries/${chapter.id}`);
@@ -576,40 +829,36 @@ function ChapterRow({
 
   return (
     <div
-      className={`chapter-row${dragOver ? ' drag-over' : ''}${isEditing ? ' is-editing' : ''}`}
-      draggable={!isEditing}
-      onDragStart={onDragStart}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={() => {
-        setDragOver(false);
-        onDrop();
-      }}
+      ref={registerRef}
+      data-chapter-id={chapter.id}
+      className={`chapter-row${isEditing ? ' is-editing' : ''}${dimmed ? ' reorder-dim' : ''}${justDropped ? ' just-dropped' : ''}`}
       onClick={(e) => {
         if (isEditing) return;
         if ((e.target as HTMLElement).closest('button')) return;
+        if ((e.target as HTMLElement).closest('.chapter-drag-handle')) return;
         openChapter();
       }}
     >
-      <span className="chapter-drag-handle" title="Drag to reorder">
-        ⠿
-      </span>
       <div className="chapter-row-controls">
         <button
-          className="chapter-trash-icon"
+          className="chapter-icon-btn chapter-trash-icon"
           title="Delete chapter"
           onClick={(e) => {
             e.stopPropagation();
-            if (window.confirm(`Delete "${chapter.title || 'this chapter'}"? This can't be undone.`)) {
-              void onDelete();
-            }
+            onRequestDelete();
           }}
         >
-          ✕
+          <TrashIcon />
         </button>
+        {!isEditing && (
+          <span
+            className="chapter-icon-btn chapter-drag-handle"
+            title="Drag to reorder"
+            onMouseDown={onGrabHandle}
+          >
+            ⠿
+          </span>
+        )}
       </div>
 
       <div className="chapter-eyebrow">Chapter {index + 1}</div>
@@ -764,168 +1013,127 @@ function NewChapterDialog({
 
 type EntityFields = 'name' | 'role' | 'summary';
 
-function EntityForm({
+// Shared add/edit popup for Characters, Places, and Threads — mirrors the
+// prototype's single openEntityDialog(opts, item) function, which drives both
+// creation and editing off the same field list rather than separate UIs.
+function EntityDialog({
+  title,
   fields,
+  initial,
+  submitLabel,
   onCancel,
   onSubmit,
 }: {
+  title: string;
   fields: EntityFields[];
+  initial?: { name?: string; role?: string; summary?: string };
+  submitLabel: string;
   onCancel: () => void;
   onSubmit: (values: { name: string; role?: string; summary?: string }) => Promise<void>;
 }) {
-  const [name, setName] = useState('');
-  const [role, setRole] = useState('');
-  const [summary, setSummary] = useState('');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [role, setRole] = useState(initial?.role ?? '');
+  const [summary, setSummary] = useState(initial?.summary ?? '');
   const [saving, setSaving] = useState(false);
 
+  async function submit() {
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    try {
+      await onSubmit({ name, role, summary });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <form
-      className="entity-form"
-      onSubmit={async (e) => {
-        e.preventDefault();
-        if (!name.trim()) return;
-        setSaving(true);
-        try {
-          await onSubmit({ name, role, summary });
-        } finally {
-          setSaving(false);
-        }
-      }}
-    >
-      <input
-        className="text-input"
-        placeholder="Name"
-        value={name}
-        autoFocus
-        disabled={saving}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => e.key === 'Escape' && onCancel()}
-      />
-      {fields.includes('role') && (
+    <div className="confirm-overlay" onClick={onCancel}>
+      <div className="entity-dialog" onClick={(e) => e.stopPropagation()}>
+        <h3 className="entity-dialog-title">{title}</h3>
         <input
           className="text-input"
-          placeholder="Role in the story"
-          value={role}
+          placeholder="Name"
+          value={name}
+          autoFocus
           disabled={saving}
-          onChange={(e) => setRole(e.target.value)}
-          style={{ marginTop: 8 }}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Escape' && onCancel()}
         />
-      )}
-      {fields.includes('summary') && (
-        <textarea
-          className="manifesto-textarea"
-          placeholder="Short summary…"
-          value={summary}
-          disabled={saving}
-          onChange={(e) => setSummary(e.target.value)}
-          style={{ marginTop: 8, minHeight: 70 }}
-        />
-      )}
-      <div className="form-actions" style={{ marginTop: 10 }}>
-        <button type="submit" className="primary-btn" disabled={saving || !name.trim()}>
-          {saving ? 'Saving…' : 'Add'}
-        </button>
-        <button type="button" className="secondary-btn" onClick={onCancel} disabled={saving}>
-          Cancel
-        </button>
+        {fields.includes('role') && (
+          <input
+            className="text-input"
+            placeholder="Role in the story"
+            value={role}
+            disabled={saving}
+            onChange={(e) => setRole(e.target.value)}
+          />
+        )}
+        {fields.includes('summary') && (
+          <textarea
+            className="manifesto-textarea"
+            style={{ minHeight: 70 }}
+            placeholder="Short summary…"
+            value={summary}
+            disabled={saving}
+            onChange={(e) => setSummary(e.target.value)}
+          />
+        )}
+        <div className="entity-dialog-actions">
+          <button className="secondary-btn" onClick={onCancel} disabled={saving}>
+            Cancel
+          </button>
+          <button className="primary-btn" onClick={submit} disabled={saving || !name.trim()}>
+            {saving ? 'Saving…' : submitLabel}
+          </button>
+        </div>
       </div>
-    </form>
+    </div>
   );
 }
 
+// Character/Place/Thread card — mirrors the prototype's entityCard(): no
+// inline editing, no visible Edit/Delete text buttons. Clicking the card body
+// opens the edit dialog; a small hover-revealed delete icon (top-right) opens
+// the shared confirm dialog.
 function EntityCard({
   name,
   role,
   summary,
   source,
-  fields,
-  onSave,
-  onDelete,
+  typeLabel,
+  onEdit,
+  onRequestDelete,
 }: {
   name: string;
   role?: string;
   summary: string;
   source: 'manual' | 'auto';
-  fields: EntityFields[];
-  onSave: (values: { name?: string; role?: string; summary?: string }) => Promise<void>;
-  onDelete: () => Promise<void>;
+  typeLabel: string;
+  onEdit: () => void;
+  onRequestDelete: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [nameVal, setNameVal] = useState(name);
-  const [roleVal, setRoleVal] = useState(role ?? '');
-  const [summaryVal, setSummaryVal] = useState(summary);
-  const [saving, setSaving] = useState(false);
-
-  if (editing) {
-    return (
-      <div className="entity-card editing">
-        <input
-          className="text-input"
-          value={nameVal}
-          disabled={saving}
-          onChange={(e) => setNameVal(e.target.value)}
-        />
-        {fields.includes('role') && (
-          <input
-            className="text-input"
-            value={roleVal}
-            disabled={saving}
-            placeholder="Role in the story"
-            onChange={(e) => setRoleVal(e.target.value)}
-            style={{ marginTop: 8 }}
-          />
-        )}
-        <textarea
-          className="manifesto-textarea"
-          value={summaryVal}
-          disabled={saving}
-          onChange={(e) => setSummaryVal(e.target.value)}
-          style={{ marginTop: 8, minHeight: 70 }}
-        />
-        <div className="form-actions" style={{ marginTop: 10 }}>
-          <button
-            className="primary-btn"
-            disabled={saving}
-            onClick={async () => {
-              setSaving(true);
-              try {
-                await onSave(
-                  fields.includes('role')
-                    ? { name: nameVal, role: roleVal, summary: summaryVal }
-                    : { name: nameVal, summary: summaryVal }
-                );
-                setEditing(false);
-              } finally {
-                setSaving(false);
-              }
-            }}
-          >
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-          <button className="secondary-btn" disabled={saving} onClick={() => setEditing(false)}>
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="entity-card">
+    <div className="entity-card" onClick={onEdit}>
+      <button
+        className="entity-delete-btn"
+        title={`Delete ${typeLabel}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRequestDelete();
+        }}
+      >
+        <TrashIcon />
+      </button>
       <div className="entity-card-head">
         <span className="entity-name">{name}</span>
-        {source === 'auto' && <span className="auto-badge">Auto</span>}
+        {source === 'auto' && (
+          <span className="auto-badge">
+            <span className="icon">✦</span>Auto
+          </span>
+        )}
       </div>
       {role && <div className="entity-role">{role}</div>}
       {summary && <p className="entity-summary">{summary}</p>}
-      <div className="actions">
-        <button className="action-btn" onClick={() => setEditing(true)}>
-          Edit
-        </button>
-        <button className="action-btn" onClick={onDelete}>
-          Delete
-        </button>
-      </div>
     </div>
   );
 }

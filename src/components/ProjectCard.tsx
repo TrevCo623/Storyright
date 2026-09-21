@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { deleteSubject } from '@/app/subjects/actions';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import TrashIcon from '@/components/icons/TrashIcon';
 
 interface Props {
   id: string;
@@ -14,9 +16,9 @@ interface Props {
 export default function ProjectCard({ id, title, meta, summary }: Props) {
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   async function handleDelete() {
-    if (!window.confirm(`Delete "${title || 'this story'}"? This can't be undone.`)) return;
     setDeleting(true);
     try {
       await deleteSubject(id);
@@ -40,11 +42,23 @@ export default function ProjectCard({ id, title, meta, summary }: Props) {
         title="Delete this story"
         onClick={(e) => {
           e.stopPropagation();
-          void handleDelete();
+          setConfirmingDelete(true);
         }}
       >
-        ✕
+        <TrashIcon />
       </button>
+      {confirmingDelete && (
+        <ConfirmDialog
+          title="Delete this story?"
+          message={`"${title || 'This story'}" will be permanently removed. This can't be undone.`}
+          confirmLabel="Delete"
+          onCancel={() => setConfirmingDelete(false)}
+          onConfirm={() => {
+            setConfirmingDelete(false);
+            void handleDelete();
+          }}
+        />
+      )}
       <div className="project-card-top">
         <div className="project-card-title">{title}</div>
         <div className="project-card-meta">{meta}</div>

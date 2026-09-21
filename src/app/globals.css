@@ -43,6 +43,11 @@ html[data-theme='dark'] {
 
   --suggestion-rest: rgba(233, 231, 226, 0.1);
   --current-line: rgba(255, 255, 255, 0.035);
+  --drop-pulse-rgb: 255, 255, 255;
+
+  --danger: #c9766f;
+  --danger-text: #e0a29c;
+  --danger-soft: rgba(201, 118, 111, 0.16);
 }
 
 html[data-theme='light'] {
@@ -78,6 +83,11 @@ html[data-theme='light'] {
 
   --suggestion-rest: rgba(33, 37, 43, 0.06);
   --current-line: rgba(0, 0, 0, 0.03);
+  --drop-pulse-rgb: 0, 0, 0;
+
+  --danger: #b0504a;
+  --danger-text: #a04943;
+  --danger-soft: rgba(176, 80, 74, 0.12);
 }
 
 * { box-sizing: border-box; }
@@ -559,7 +569,8 @@ a { color: inherit; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Floating variant — pinned bottom-right of a scroll area (chapter editor) */
-.review-btn-float {
+.review-btn-float,
+.floating-add-btn {
   position: absolute;
   bottom: 42px;
   right: 24px;
@@ -680,14 +691,15 @@ a { color: inherit; }
   margin: 6px 8px 0 0;
 }
 .primary-btn {
-  background: var(--accent-soft);
-  color: var(--accent-text);
+  background: var(--bg-pop);
+  color: var(--text-pop);
   font-size: 14px;
   font-weight: 500;
   padding: 10px 20px;
   border-radius: var(--radius-sm);
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
 }
-.primary-btn:hover { filter: brightness(1.1); }
+.primary-btn:hover { background: var(--text-pop); color: var(--bg-pop); }
 .primary-btn:disabled { opacity: 0.5; cursor: default; }
 .secondary-btn {
   color: var(--text-secondary);
@@ -798,8 +810,6 @@ a { color: inherit; }
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
-/* Add-chapter/character/place/thread — context-sensitive per active tab */
-.floating-add-btn { position: absolute; bottom: 42px; right: 24px; z-index: 5; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28); }
 
 .outline-section { margin-bottom: 44px; }
 .outline-section-header {
@@ -911,27 +921,51 @@ a { color: inherit; }
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, opacity 0.2s ease;
 }
 .chapter-row:hover:not(.is-editing) { background: var(--bg-hover); }
-.chapter-row.drag-over { background: var(--accent-soft); }
 .chapter-row.is-editing { cursor: default; background: var(--bg-hover); padding-bottom: 76px; }
 
-.chapter-drag-handle {
-  position: absolute;
-  top: 24px;
-  left: 4px;
-  cursor: grab;
-  color: var(--text-tertiary);
-  font-size: 15px;
-  padding: 4px 2px;
-  user-select: none;
-  opacity: 0;
+/* Reordering — a custom mouse-driven drag (not native HTML5 DnD) so we keep
+   full control of the cursor for the whole press-and-hold gesture. The
+   grabbed row becomes a fixed-position "ghost" that tracks the cursor while
+   a drop-slot placeholder opens up wherever it would land. */
+.chapter-row.reorder-dim { opacity: 0.4; }
+.chapter-row.chapter-drag-ghost {
+  position: fixed;
+  margin: 0;
+  z-index: 1000;
   pointer-events: none;
-  transition: opacity 0.15s ease;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.35);
+  transition: none;
 }
-.chapter-row:hover .chapter-drag-handle { opacity: 1; pointer-events: auto; }
-.chapter-drag-handle:active { cursor: grabbing; }
+.chapter-drop-slot {
+  flex: none;
+  height: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  opacity: 0;
+  transition: height 0.18s ease, opacity 0.18s ease;
+}
+.chapter-drop-slot.active { height: 28px; opacity: 1; }
+
+/* Brief outline pulse on the tile that was just dropped, so the eye can find
+   it again after the list resettles into its new order. */
+@keyframes chapterDropPulse {
+  0% { box-shadow: 0 0 0 0 rgba(var(--drop-pulse-rgb), 0.6); }
+  12% { box-shadow: 0 0 0 2px rgba(var(--drop-pulse-rgb), 0.6); }
+  100% { box-shadow: 0 0 0 2px rgba(var(--drop-pulse-rgb), 0); }
+}
+.chapter-row.just-dropped { animation: chapterDropPulse 2s ease-out forwards; }
+
+/* Locks the grab cursor for the whole drag gesture even when the pointer
+   passes over other elements mid-drag, and suppresses hover treatment on
+   rows so the drop slot alone communicates where the tile will land. */
+body.is-reordering, body.is-reordering * { cursor: grabbing !important; user-select: none; }
+body.is-reordering .chapter-row:hover:not(.is-editing) { background: var(--bg-elevated); }
+body.is-reordering .chapter-row:hover .chapter-trash-icon,
+body.is-reordering .chapter-row:hover .chapter-write-btn,
+body.is-reordering .chapter-row:hover .chapter-edit-link { opacity: 0; pointer-events: none; }
 
 .chapter-row-controls {
   position: absolute;
@@ -940,16 +974,36 @@ a { color: inherit; }
   display: flex;
   align-items: center;
   gap: 8px;
+  z-index: 2;
 }
+.chapter-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  transition: color 0.15s ease;
+}
+.chapter-icon-btn:hover { color: var(--text-pop); }
 .chapter-trash-icon {
   opacity: 0;
   pointer-events: none;
-  color: var(--text-tertiary);
   font-size: 13px;
   transition: opacity 0.15s ease, color 0.15s ease;
 }
 .chapter-row:hover .chapter-trash-icon, .chapter-row.is-editing .chapter-trash-icon { opacity: 1; pointer-events: auto; }
-.chapter-trash-icon:hover { color: var(--sug-tone); }
+
+/* Unlike the trash icon, the drag handle stays visible at rest — it's the
+   persistent affordance that a row can be reordered, not a hover-only action. */
+.chapter-drag-handle {
+  cursor: grab;
+  font-size: 15px;
+  line-height: 1;
+  user-select: none;
+}
+.chapter-drag-handle:active { cursor: grabbing; }
 
 .chapter-index {
   display: inline-flex;
@@ -1034,6 +1088,29 @@ a { color: inherit; }
 .entity-dialog .manifesto-textarea { margin-top: 10px; }
 .entity-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 
+/* Styled delete-confirmation dialog — replaces window.confirm() everywhere */
+.confirm-dialog { background: var(--bg-elevated); border-radius: var(--radius-lg); padding: 24px; max-width: 360px; width: calc(100% - 48px); box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+.confirm-title { font-family: var(--font-editor); font-size: 17px; font-weight: 500; color: var(--text-primary); margin: 0 0 10px; }
+.confirm-message { font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); margin: 0; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+.confirm-btn-cancel {
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+}
+.confirm-btn-cancel:hover { color: var(--text-primary); background: var(--bg-hover); }
+.confirm-btn-danger {
+  background: var(--danger-soft);
+  color: var(--danger-text);
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+}
+.confirm-btn-danger:hover { filter: brightness(1.15); }
+
 /* Characters / Places */
 .entity-grid {
   display: grid;
@@ -1041,43 +1118,47 @@ a { color: inherit; }
   gap: 12px;
 }
 .entity-card {
-  border: 1px solid var(--border);
+  position: relative;
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
   padding: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
-.entity-card.editing { grid-column: 1 / -1; }
-.entity-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.entity-card:hover { background: var(--bg-hover); }
+.entity-card-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; padding-right: 22px; }
 .entity-name { font-family: var(--font-editor); font-size: 15px; color: var(--text-primary); }
 .entity-role { font-size: 11.5px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
 .entity-summary { font-size: 13px; line-height: 1.55; color: var(--text-secondary); margin: 0; }
 .auto-badge {
-  font-size: 9px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
-  color: var(--sug-pacing); background: var(--sug-pacing-soft); padding: 1px 6px; border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-pop);
+  padding: 3px 10px 3px 8px;
+  border-radius: 20px;
 }
-.entity-card .actions { margin-left: 0; }
-.entity-form {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--bg-elevated);
-  padding: 14px;
-  margin-bottom: 12px;
-}
-
-/* Threads */
-.thread-list { display: flex; flex-direction: column; gap: 2px; }
-.thread-row {
+.auto-badge .icon { font-size: 9px; line-height: 1; }
+.entity-delete-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: var(--text-tertiary);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
 }
-.thread-row:hover { background: var(--bg-hover); }
-.thread-row:hover .action-btn { opacity: 1; pointer-events: auto; }
-.thread-row .action-btn { opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
-.thread-title { font-size: 14px; color: var(--text-primary); text-align: left; }
-.thread-title:hover { color: var(--accent-text); }
+.entity-card:hover .entity-delete-btn { opacity: 1; pointer-events: auto; }
+.entity-delete-btn:hover { color: var(--text-primary); background: var(--bg-pop); }
 
 /* Outline review panel */
 .review-summary {
