@@ -294,29 +294,39 @@ export default function OutlineView({
           {/* ---------- Chapters ---------- */}
           <div className={`tab-panel${activeTab === 'chapters' ? ' active' : ''}`}>
             <section className="outline-section" style={{ marginTop: 16 }}>
-              {chapters.length === 0 && (
-                <p className="outline-empty">No chapters yet — add your first one below.</p>
-              )}
               <div className="chapter-list">
-                {chapters.map((chapter, index) => (
-                  <ChapterRow
-                    key={chapter.id}
-                    subjectId={subjectId}
-                    chapter={chapter}
-                    index={index}
-                    onDragStart={() => (dragIndex.current = index)}
-                    onDrop={() => handleChapterDrop(index)}
-                    onSaved={(patch) =>
-                      setChapters((prev) =>
-                        prev.map((c) => (c.id === chapter.id ? { ...c, ...patch } : c))
-                      )
-                    }
-                    onDelete={async () => {
-                      await deleteEntry(subjectId, chapter.id);
-                      setChapters((prev) => prev.filter((c) => c.id !== chapter.id));
-                    }}
-                  />
-                ))}
+                {chapters.length === 0 ? (
+                  <button className="empty-tile" onClick={() => setChapterDialogOpen(true)}>
+                    <div className="empty-tile-title">Add some good bones to your story.</div>
+                    <div className="empty-tile-circle">+</div>
+                  </button>
+                ) : (
+                  <>
+                    {chapters.map((chapter, index) => (
+                      <ChapterRow
+                        key={chapter.id}
+                        subjectId={subjectId}
+                        chapter={chapter}
+                        index={index}
+                        onDragStart={() => (dragIndex.current = index)}
+                        onDrop={() => handleChapterDrop(index)}
+                        onSaved={(patch) =>
+                          setChapters((prev) =>
+                            prev.map((c) => (c.id === chapter.id ? { ...c, ...patch } : c))
+                          )
+                        }
+                        onDelete={async () => {
+                          await deleteEntry(subjectId, chapter.id);
+                          setChapters((prev) => prev.filter((c) => c.id !== chapter.id));
+                        }}
+                      />
+                    ))}
+                    <button className="chapter-add-tile" onClick={() => setChapterDialogOpen(true)}>
+                      <span className="chapter-add-tile-circle">+</span>
+                      <span>Add a new chapter</span>
+                    </button>
+                  </>
+                )}
               </div>
               {chapterDialogOpen && chaptersSectionId && (
                 <NewChapterDialog
@@ -349,32 +359,34 @@ export default function OutlineView({
                   }}
                 />
               )}
-              {characters.length === 0 && !addingCharacter && (
-                <p className="outline-empty">
-                  No characters yet — add one, or write a chapter and Review will pull them out for you.
-                </p>
-              )}
               <div className="entity-grid">
-                {characters.map((character) => (
-                  <EntityCard
-                    key={character.id}
-                    name={character.name}
-                    role={character.role}
-                    summary={character.summary}
-                    source={character.source}
-                    fields={['name', 'role', 'summary']}
-                    onSave={async (values) => {
-                      await updateCharacter(subjectId, character.id, values);
-                      setCharacters((prev) =>
-                        prev.map((c) => (c.id === character.id ? { ...c, ...values } : c))
-                      );
-                    }}
-                    onDelete={async () => {
-                      await deleteCharacter(subjectId, character.id);
-                      setCharacters((prev) => prev.filter((c) => c.id !== character.id));
-                    }}
-                  />
-                ))}
+                {characters.length === 0 && !addingCharacter ? (
+                  <button className="empty-tile" onClick={() => setAddingCharacter(true)}>
+                    <div className="empty-tile-title">Tell us who brings your story to life.</div>
+                    <div className="empty-tile-circle">+</div>
+                  </button>
+                ) : (
+                  characters.map((character) => (
+                    <EntityCard
+                      key={character.id}
+                      name={character.name}
+                      role={character.role}
+                      summary={character.summary}
+                      source={character.source}
+                      fields={['name', 'role', 'summary']}
+                      onSave={async (values) => {
+                        await updateCharacter(subjectId, character.id, values);
+                        setCharacters((prev) =>
+                          prev.map((c) => (c.id === character.id ? { ...c, ...values } : c))
+                        );
+                      }}
+                      onDelete={async () => {
+                        await deleteCharacter(subjectId, character.id);
+                        setCharacters((prev) => prev.filter((c) => c.id !== character.id));
+                      }}
+                    />
+                  ))
+                )}
               </div>
             </section>
           </div>
@@ -396,29 +408,31 @@ export default function OutlineView({
                   }}
                 />
               )}
-              {places.length === 0 && !addingPlace && (
-                <p className="outline-empty">
-                  No places yet — add one, or write a chapter and Review will pull them out for you.
-                </p>
-              )}
               <div className="entity-grid">
-                {places.map((place) => (
-                  <EntityCard
-                    key={place.id}
-                    name={place.name}
-                    summary={place.summary}
-                    source={place.source}
-                    fields={['name', 'summary']}
-                    onSave={async (values) => {
-                      await updatePlace(subjectId, place.id, values);
-                      setPlaces((prev) => prev.map((p) => (p.id === place.id ? { ...p, ...values } : p)));
-                    }}
-                    onDelete={async () => {
-                      await deletePlace(subjectId, place.id);
-                      setPlaces((prev) => prev.filter((p) => p.id !== place.id));
-                    }}
-                  />
-                ))}
+                {places.length === 0 && !addingPlace ? (
+                  <button className="empty-tile" onClick={() => setAddingPlace(true)}>
+                    <div className="empty-tile-title">Show us where your story unfolds.</div>
+                    <div className="empty-tile-circle">+</div>
+                  </button>
+                ) : (
+                  places.map((place) => (
+                    <EntityCard
+                      key={place.id}
+                      name={place.name}
+                      summary={place.summary}
+                      source={place.source}
+                      fields={['name', 'summary']}
+                      onSave={async (values) => {
+                        await updatePlace(subjectId, place.id, values);
+                        setPlaces((prev) => prev.map((p) => (p.id === place.id ? { ...p, ...values } : p)));
+                      }}
+                      onDelete={async () => {
+                        await deletePlace(subjectId, place.id);
+                        setPlaces((prev) => prev.filter((p) => p.id !== place.id));
+                      }}
+                    />
+                  ))
+                )}
               </div>
             </section>
           </div>
@@ -426,28 +440,40 @@ export default function OutlineView({
           {/* ---------- Threads ---------- */}
           <div className={`tab-panel${activeTab === 'threads' ? ' active' : ''}`}>
             <section className="outline-section" style={{ marginTop: 16 }}>
-              {threads.length === 0 && (
-                <p className="outline-empty">
-                  A catch-all for anything else — loose ideas, questions, research notes.
-                </p>
-              )}
               <div className="thread-list">
-                {threads.map((thread) => (
-                  <div key={thread.id} className="thread-row">
-                    <button
-                      className="thread-title"
-                      onClick={() => router.push(`/subjects/${subjectId}/entries/${thread.id}`)}
-                    >
-                      {thread.title}
-                    </button>
-                    <button
-                      className="action-btn"
-                      onClick={() => void deleteEntry(subjectId, thread.id)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))}
+                {threads.length === 0 ? (
+                  <button
+                    className="empty-tile"
+                    onClick={() =>
+                      threadsSectionId &&
+                      void createEntry(subjectId, threadsSectionId, null, 'Untitled thread')
+                    }
+                  >
+                    <div className="empty-tile-title">Track the threads that tie it all together.</div>
+                    <div className="empty-tile-desc">
+                      A place for unfinished thoughts, ideas, and loose threads that you&rsquo;re not
+                      ready to add yet.
+                    </div>
+                    <div className="empty-tile-circle">+</div>
+                  </button>
+                ) : (
+                  threads.map((thread) => (
+                    <div key={thread.id} className="thread-row">
+                      <button
+                        className="thread-title"
+                        onClick={() => router.push(`/subjects/${subjectId}/entries/${thread.id}`)}
+                      >
+                        {thread.title}
+                      </button>
+                      <button
+                        className="action-btn"
+                        onClick={() => void deleteEntry(subjectId, thread.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </section>
           </div>

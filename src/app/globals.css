@@ -824,8 +824,87 @@ a { color: inherit; }
 .outline-empty { font-size: 13px; color: var(--text-tertiary); line-height: 1.6; margin: 0; }
 .summary-fields .field-label:first-child { margin-top: 0; }
 
+/* Empty-state tiles (Chapters/Characters/Places/Threads, matches prototype) */
+.empty-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  height: 300px;
+  padding: 30px 20px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  text-align: center;
+  width: 100%;
+  transition: background 0.15s ease;
+}
+.empty-tile:hover { background: var(--bg-hover); }
+.empty-tile-title {
+  font-family: var(--font-editor);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 460px;
+  line-height: 1.4;
+}
+.empty-tile-desc {
+  font-family: var(--font-ui);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  margin: -12px 0 0;
+  max-width: 320px;
+}
+.empty-tile-circle {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-editor);
+  font-size: 18px;
+  color: var(--text-primary);
+}
+.entity-grid .empty-tile { grid-column: 1 / -1; }
+
 /* Chapters */
 .chapter-list { display: flex; flex-direction: column; gap: 10px; }
+.chapter-add-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.chapter-add-tile:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-soft); }
+.chapter-add-tile-circle {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-editor);
+  font-size: 14px;
+  line-height: 1;
+}
 .chapter-row {
   position: relative;
   padding: 24px 24px 28px;
