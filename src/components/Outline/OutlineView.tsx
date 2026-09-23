@@ -32,17 +32,6 @@ const TABS: { id: OutlineTab; label: string }[] = [
   { id: 'overview', label: 'Summary' },
 ];
 
-// Floating "New X" pill, bottom-right of the outline area — shown per active
-// tab, same as the prototype's single floatingAddBtn + ADD_LABELS map. It's
-// the *only* way to add a character/place/thread once that tab's grid is
-// non-empty (no persistent add-tile there, unlike chapters).
-const FLOATING_ADD_LABELS: Partial<Record<OutlineTab, string>> = {
-  chapters: 'New Chapter',
-  characters: 'New Character',
-  places: 'New Place',
-  threads: 'New Thread',
-};
-
 const CATEGORY_COLOR_VAR: Record<OutlineSuggestionCategory, string> = {
   chapter: 'var(--accent)',
   character: 'var(--sug-tone)',
@@ -562,28 +551,34 @@ export default function OutlineView({
                     <div className="empty-tile-circle">+</div>
                   </button>
                 ) : (
-                  characters.map((character) => (
-                    <EntityCard
-                      key={character.id}
-                      name={character.name}
-                      role={character.role}
-                      summary={character.summary}
-                      source={character.source}
-                      typeLabel="character"
-                      onEdit={() => setEditingCharacter(character)}
-                      onRequestDelete={() =>
-                        setConfirmDialog({
-                          title: 'Delete this character?',
-                          message: `"${character.name || 'Untitled'}" will be removed from your outline. This can't be undone.`,
-                          confirmLabel: 'Delete',
-                          onConfirm: async () => {
-                            await deleteCharacter(subjectId, character.id);
-                            setCharacters((prev) => prev.filter((c) => c.id !== character.id));
-                          },
-                        })
-                      }
-                    />
-                  ))
+                  <>
+                    {characters.map((character) => (
+                      <EntityCard
+                        key={character.id}
+                        name={character.name}
+                        role={character.role}
+                        summary={character.summary}
+                        source={character.source}
+                        typeLabel="character"
+                        onEdit={() => setEditingCharacter(character)}
+                        onRequestDelete={() =>
+                          setConfirmDialog({
+                            title: 'Delete this character?',
+                            message: `"${character.name || 'Untitled'}" will be removed from your outline. This can't be undone.`,
+                            confirmLabel: 'Delete',
+                            onConfirm: async () => {
+                              await deleteCharacter(subjectId, character.id);
+                              setCharacters((prev) => prev.filter((c) => c.id !== character.id));
+                            },
+                          })
+                        }
+                      />
+                    ))}
+                    <button className="entity-add-tile" onClick={() => setAddingCharacter(true)}>
+                      <span className="chapter-add-tile-circle">+</span>
+                      <span>Add a new character</span>
+                    </button>
+                  </>
                 )}
               </div>
             </section>
@@ -631,27 +626,33 @@ export default function OutlineView({
                     <div className="empty-tile-circle">+</div>
                   </button>
                 ) : (
-                  places.map((place) => (
-                    <EntityCard
-                      key={place.id}
-                      name={place.name}
-                      summary={place.summary}
-                      source={place.source}
-                      typeLabel="place"
-                      onEdit={() => setEditingPlace(place)}
-                      onRequestDelete={() =>
-                        setConfirmDialog({
-                          title: 'Delete this place?',
-                          message: `"${place.name || 'Untitled'}" will be removed from your outline. This can't be undone.`,
-                          confirmLabel: 'Delete',
-                          onConfirm: async () => {
-                            await deletePlace(subjectId, place.id);
-                            setPlaces((prev) => prev.filter((p) => p.id !== place.id));
-                          },
-                        })
-                      }
-                    />
-                  ))
+                  <>
+                    {places.map((place) => (
+                      <EntityCard
+                        key={place.id}
+                        name={place.name}
+                        summary={place.summary}
+                        source={place.source}
+                        typeLabel="place"
+                        onEdit={() => setEditingPlace(place)}
+                        onRequestDelete={() =>
+                          setConfirmDialog({
+                            title: 'Delete this place?',
+                            message: `"${place.name || 'Untitled'}" will be removed from your outline. This can't be undone.`,
+                            confirmLabel: 'Delete',
+                            onConfirm: async () => {
+                              await deletePlace(subjectId, place.id);
+                              setPlaces((prev) => prev.filter((p) => p.id !== place.id));
+                            },
+                          })
+                        }
+                      />
+                    ))}
+                    <button className="entity-add-tile" onClick={() => setAddingPlace(true)}>
+                      <span className="chapter-add-tile-circle">+</span>
+                      <span>Add a new place</span>
+                    </button>
+                  </>
                 )}
               </div>
             </section>
@@ -705,24 +706,30 @@ export default function OutlineView({
                     <div className="empty-tile-circle">+</div>
                   </button>
                 ) : (
-                  threads.map((thread) => (
-                    <EntityCard
-                      key={thread.id}
-                      name={thread.title}
-                      summary={thread.synopsis}
-                      source="manual"
-                      typeLabel="thread"
-                      onEdit={() => setEditingThread(thread)}
-                      onRequestDelete={() =>
-                        setConfirmDialog({
-                          title: 'Delete this thread?',
-                          message: `"${thread.title || 'Untitled'}" will be removed from your outline. This can't be undone.`,
-                          confirmLabel: 'Delete',
-                          onConfirm: () => void deleteEntry(subjectId, thread.id),
-                        })
-                      }
-                    />
-                  ))
+                  <>
+                    {threads.map((thread) => (
+                      <EntityCard
+                        key={thread.id}
+                        name={thread.title}
+                        summary={thread.synopsis}
+                        source="manual"
+                        typeLabel="thread"
+                        onEdit={() => setEditingThread(thread)}
+                        onRequestDelete={() =>
+                          setConfirmDialog({
+                            title: 'Delete this thread?',
+                            message: `"${thread.title || 'Untitled'}" will be removed from your outline. This can't be undone.`,
+                            confirmLabel: 'Delete',
+                            onConfirm: () => void deleteEntry(subjectId, thread.id),
+                          })
+                        }
+                      />
+                    ))}
+                    <button className="entity-add-tile" onClick={() => setAddingThread(true)}>
+                      <span className="chapter-add-tile-circle">+</span>
+                      <span>Add a new thread</span>
+                    </button>
+                  </>
                 )}
               </div>
             </section>
@@ -771,20 +778,6 @@ export default function OutlineView({
         />
       )}
 
-      {FLOATING_ADD_LABELS[activeTab] && (
-        <button
-          className="review-btn floating-add-btn"
-          onClick={() => {
-            if (activeTab === 'chapters') { if (chaptersSectionId) setChapterDialogOpen(true); }
-            else if (activeTab === 'characters') setAddingCharacter(true);
-            else if (activeTab === 'places') setAddingPlace(true);
-            else if (activeTab === 'threads') { if (threadsSectionId) setAddingThread(true); }
-          }}
-        >
-          <span className="icon">+</span>
-          <span>{FLOATING_ADD_LABELS[activeTab]}</span>
-        </button>
-      )}
       </main>
     </div>
   );

@@ -463,7 +463,7 @@ a { color: inherit; }
   display: flex;
   flex-direction: column;
   min-width: 0;
-  background: var(--bg-editor);
+  background: var(--bg);
   position: relative;
 }
 .topbar {
@@ -487,7 +487,7 @@ a { color: inherit; }
 .icon-btn.active { background: var(--bg-pop); color: var(--text-primary); }
 .icon-btn.theme-toggle-btn { border-radius: 20px; }
 html[data-theme='light'] .icon-btn.theme-toggle-btn { background: var(--bg-pop); color: var(--text-pop); }
-html[data-theme='light'] .icon-btn.theme-toggle-btn:hover { background: var(--text-pop); color: var(--bg-pop); }
+html[data-theme='light'] .icon-btn.theme-toggle-btn:hover { background: var(--bg-hover); }
 
 .editor-scroll { flex: 1; overflow-y: auto; display: flex; justify-content: center; position: relative; }
 .editor-column { width: 100%; max-width: 640px; padding: 56px 24px 100px; }
@@ -575,15 +575,18 @@ html[data-theme='light'] .icon-btn.theme-toggle-btn:hover { background: var(--te
   font-weight: 500;
   transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
 }
-html[data-theme='light'] .review-btn { color: var(--text-pop); }
 .review-btn:hover { background: var(--text-pop); color: var(--bg-pop); }
+/* Light mode: washed-out default (matches Figma's 50%-opacity default state),
+   full-contrast on hover — mirrors dark mode's muted-default/pop-hover pattern. */
+html[data-theme='light'] .review-btn { color: var(--text-pop); opacity: 0.5; }
+html[data-theme='light'] .review-btn:hover { color: var(--bg-pop); opacity: 1; }
 .review-btn.loading { opacity: 0.75; cursor: default; }
+html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
 .review-btn.loading .icon { display: inline-block; animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* Floating variant — pinned bottom-right of a scroll area (chapter editor) */
-.review-btn-float,
-.floating-add-btn {
+.review-btn-float {
   position: absolute;
   bottom: 42px;
   right: 24px;
@@ -774,7 +777,7 @@ html[data-theme='light'] .review-btn { color: var(--text-pop); }
   position: sticky;
   top: 0;
   z-index: 20;
-  background: var(--bg-editor);
+  background: var(--bg);
   padding-top: 48px;
   margin-top: -48px;
 }
@@ -1171,6 +1174,24 @@ body.is-reordering .chapter-row:hover .chapter-edit-link { opacity: 0; pointer-e
   transition: opacity 0.15s ease;
 }
 .entity-card:hover .entity-delete-btn { opacity: 1; pointer-events: auto; }
+.entity-add-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 108px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-tertiary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.entity-add-tile:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-soft); }
 .entity-delete-btn:hover { color: var(--text-primary); background: var(--bg-pop); }
 
 /* Outline review panel */
