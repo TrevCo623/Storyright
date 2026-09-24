@@ -16,7 +16,7 @@ export default function DashedOutline() {
         fill="none"
         strokeWidth="1"
         strokeDasharray="10 10"
-        style={{ stroke: 'var(--border)' }}
+        style={{ stroke: 'var(--border-dashed)' }}
       />
     </svg>
   );

@@ -461,9 +461,14 @@ export default function OutlineView({
                   <button className="summary-edit-btn" onClick={() => startEditSummaryField('premise')}>
                     Edit
                   </button>
-                  <button className="summary-save-btn" onClick={() => saveSummaryField('premise')}>
-                    Save
-                  </button>
+                  <div className="summary-edit-actions">
+                    <button className="summary-save-btn" onClick={() => saveSummaryField('premise')}>
+                      Save
+                    </button>
+                    <button className="summary-cancel-btn" onClick={() => cancelEditSummaryField('premise')}>
+                      Cancel
+                    </button>
+                  </div>
                 </div>
 
                 <div className="field-row">
@@ -482,9 +487,14 @@ export default function OutlineView({
                     <button className="summary-edit-btn" onClick={() => startEditSummaryField('themes')}>
                       Edit
                     </button>
-                    <button className="summary-save-btn" onClick={() => saveSummaryField('themes')}>
-                      Save
-                    </button>
+                    <div className="summary-edit-actions">
+                      <button className="summary-save-btn" onClick={() => saveSummaryField('themes')}>
+                        Save
+                      </button>
+                      <button className="summary-cancel-btn" onClick={() => cancelEditSummaryField('themes')}>
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                   <div className={`summary-field-wrap field-group${editingSummaryField === 'takeaway' ? ' editing' : ''}`}>
                     <label className="field-label">Reader takeaway</label>
@@ -501,9 +511,14 @@ export default function OutlineView({
                     <button className="summary-edit-btn" onClick={() => startEditSummaryField('takeaway')}>
                       Edit
                     </button>
-                    <button className="summary-save-btn" onClick={() => saveSummaryField('takeaway')}>
-                      Save
-                    </button>
+                    <div className="summary-edit-actions">
+                      <button className="summary-save-btn" onClick={() => saveSummaryField('takeaway')}>
+                        Save
+                      </button>
+                      <button className="summary-cancel-btn" onClick={() => cancelEditSummaryField('takeaway')}>
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -19,6 +19,7 @@ html[data-theme='dark'] {
   --bg-pop: #2e3037;
   --border: #2b2d32;
   --border-soft: #222327;
+  --border-dashed: #2b2d32;
   --text-primary: #e9e7e2;
   --text-secondary: #9d9ea0;
   --text-tertiary: #646567;
@@ -60,6 +61,7 @@ html[data-theme='light'] {
   --bg-pop: #ffffff;
   --border: #e6e3da;
   --border-soft: #edebe3;
+  --border-dashed: #d5d3cc;
   --text-primary: #22262b;
   --text-secondary: #6b6d72;
   --text-tertiary: #9c9d9f;
@@ -201,7 +203,7 @@ html[data-theme='light'] .auth-card .brand-logo-light { display: inline-block; }
   width: var(--nav-width);
   height: 100%;
   box-sizing: border-box;
-  padding: 16px 14px 20px;
+  padding: 0 20px 20px;
   display: flex;
   flex-direction: column;
   position: absolute;
@@ -210,10 +212,14 @@ html[data-theme='light'] .auth-card .brand-logo-light { display: inline-block; }
   overflow-y: auto;
   font-size: 13px;
 }
+/* Fixed to the same 46px height as .topbar so the back link's baseline
+   lines up exactly with the breadcrumb/toolbar row in the content column
+   next to it (both start at y:0 of their own flex-row parent). */
 .nav-header {
+  height: 46px;
+  flex: none;
   display: flex;
   align-items: center;
-  margin-bottom: 14px;
 }
 .nav-back-link {
   font-size: 12.5px;
@@ -227,7 +233,7 @@ html[data-theme='light'] .auth-card .brand-logo-light { display: inline-block; }
   font-family: var(--font-editor);
   font-size: 16px;
   color: var(--text-primary);
-  margin: 2px 2px 16px;
+  margin: 20px 0;
 }
 .nav-item {
   display: block;
@@ -235,13 +241,14 @@ html[data-theme='light'] .auth-card .brand-logo-light { display: inline-block; }
   text-align: left;
   font-size: 13px;
   color: var(--text-secondary);
-  padding: 6px 8px;
+  padding: 7px 8px;
+  margin: 0 -8px;
   border-radius: var(--radius-sm);
 }
 .nav-item:hover { color: var(--text-primary); background: var(--bg-hover); }
 .nav-item.active { color: var(--text-primary); background: var(--bg-elevated); }
 
-.nav-accordion-group { display: flex; flex-direction: column; gap: 1px; }
+.nav-accordion-group { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
 .nav-section-row { display: flex; align-items: center; }
 .nav-section-label.nav-accordion-toggle {
   display: flex;
@@ -255,6 +262,7 @@ html[data-theme='light'] .auth-card .brand-logo-light { display: inline-block; }
   letter-spacing: 0.06em;
   color: var(--text-tertiary);
   padding: 10px 6px;
+  margin-left: -6px;
   border-radius: var(--radius-sm);
 }
 .nav-section-label.nav-accordion-toggle:hover { color: var(--text-secondary); background: var(--bg-hover); }
@@ -285,7 +293,8 @@ html[data-theme='light'] .auth-card .brand-logo-light { display: inline-block; }
   display: block;
   width: 100%;
   text-align: left;
-  padding: 7px 8px;
+  padding: 8px;
+  margin: 0 -8px;
   border-radius: var(--radius-sm);
   text-decoration: none;
 }
@@ -293,9 +302,9 @@ html[data-theme='light'] .auth-card .brand-logo-light { display: inline-block; }
 .nav-entry-item.active { background: var(--bg-elevated); }
 .nav-entry-name { font-size: 12.5px; color: var(--text-primary); display: block; }
 .nav-entry-meta { font-size: 11px; color: var(--text-tertiary); display: block; margin-top: 2px; }
-.nav-entry-empty { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; padding: 2px 8px 8px; margin: 0; }
+.nav-entry-empty { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; padding: 2px 0 8px; margin: 0; }
 
-.nav-insight-item { padding: 8px; border-radius: var(--radius-sm); }
+.nav-insight-item { padding: 8px; margin: 0 -8px; border-radius: var(--radius-sm); }
 .nav-insight-head { display: flex; align-items: flex-start; gap: 7px; }
 .nav-insight-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; margin-top: 5px; }
 .nav-insight-heading { font-size: 12px; font-weight: 500; color: var(--text-primary); line-height: 1.4; }
@@ -598,7 +607,6 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
   bottom: 42px;
   right: 24px;
   z-index: 5;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
 }
 
 /* Top-of-page variant — sits inline next to the outline title */
@@ -872,7 +880,10 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
 
 /* Summary tab (per Figma node 216:419) — read-view text per field, each with
    its own hover-reveal Edit button, mirroring the outline title's edit
-   interaction (.outline-title-wrap / .title-edit-btn / .title-save-btn). */
+   interaction (.outline-title-wrap / .title-edit-btn / .title-save-btn).
+   Text gets a subtle suggestion-style highlight on hover (bled out via
+   negative margin + matching padding so the highlighted box doesn't shift
+   the text's left edge relative to the label/Edit link above/below it). */
 .summary-field-wrap { position: relative; margin-bottom: 40px; }
 .summary-field-wrap:last-child { margin-bottom: 0; }
 .summary-premise-text,
@@ -880,14 +891,21 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
   font-family: var(--font-editor);
   font-weight: 400;
   color: var(--text-primary);
-  margin: 12px 0 0;
+  margin: 12px -10px 0;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
   outline: none;
   cursor: text;
+  transition: background 0.15s ease;
 }
 .summary-premise-text { font-size: 22px; line-height: 1.5; }
 .summary-field-text { font-size: 15px; line-height: 1.6; }
 .summary-premise-text.placeholder,
 .summary-field-text.placeholder { color: var(--text-tertiary); }
+.summary-premise-text:hover,
+.summary-field-text:hover { background: var(--suggestion-rest); }
+.summary-field-wrap.editing .summary-premise-text,
+.summary-field-wrap.editing .summary-field-text { background: none; }
 .summary-edit-btn {
   display: block;
   margin-top: 10px;
@@ -898,9 +916,8 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
 }
 .summary-field-wrap:hover .summary-edit-btn { opacity: 1; }
 .summary-edit-btn:hover { color: var(--text-primary); }
+.summary-edit-actions { display: none; align-items: center; gap: 16px; margin-top: 10px; }
 .summary-save-btn {
-  display: none;
-  margin-top: 10px;
   font-size: 13px;
   font-weight: 500;
   padding: 7px 14px;
@@ -910,8 +927,10 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
   transition: background 0.15s ease, color 0.15s ease;
 }
 .summary-save-btn:hover { background: var(--text-pop); color: var(--bg-pop); }
+.summary-cancel-btn { font-size: 13px; color: var(--text-secondary); }
+.summary-cancel-btn:hover { color: var(--text-primary); }
 .summary-field-wrap.editing .summary-edit-btn { display: none; }
-.summary-field-wrap.editing .summary-save-btn { display: inline-flex; }
+.summary-field-wrap.editing .summary-edit-actions { display: flex; }
 
 /* ---------- New Story page (mirrors editoir-outline-prototype.html) ---------- */
 .new-story-heading { font-family: var(--font-editor); font-size: 19px; font-weight: 500; color: var(--text-primary); margin: 0; }
