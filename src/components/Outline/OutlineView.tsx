@@ -118,6 +118,28 @@ export default function OutlineView({
   const [editingTitle, setEditingTitle] = useState(false);
   const [chaptersDirty, setChaptersDirty] = useState(false);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const [scrolled, setScrolled] = useState(false);
+
+  // Summary tab — premise/themes/takeaway each get their own hover-reveal
+  // Edit button and contentEditable field, mirroring the outline title's
+  // edit interaction (startEditTitle/saveTitle/cancelEditTitle above).
+  type SummaryField = 'premise' | 'themes' | 'takeaway';
+  const [editingSummaryField, setEditingSummaryField] = useState<SummaryField | null>(null);
+  const premiseRef = useRef<HTMLParagraphElement>(null);
+  const themesRef = useRef<HTMLParagraphElement>(null);
+  const takeawayRef = useRef<HTMLParagraphElement>(null);
+  const summaryFieldRefs = { premise: premiseRef, themes: themesRef, takeaway: takeawayRef };
+
+  // Fade the content out under the sticky title/tab bar once the panel has
+  // scrolled past the top, instead of an abrupt hard clip.
+  useEffect(() => {
+    const scrollEl = document.querySelector('.editor-scroll');
+    if (!scrollEl) return;
+    const onScroll = () => setScrolled(scrollEl.scrollTop > 0);
+    onScroll();
+    scrollEl.addEventListener('scroll', onScroll);
+    return () => scrollEl.removeEventListener('scroll', onScroll);
+  }, []);
 
   // Chapter reordering — a custom mouse-driven drag (not native HTML5 DnD) so
   // the grab cursor and drop-slot placeholder stay under our control for the
@@ -178,6 +200,48 @@ export default function OutlineView({
   function cancelEditTitle() {
     if (titleRef.current) titleRef.current.textContent = title;
     setEditingTitle(false);
+  }
+
+  function summaryFieldValue(field: SummaryField) {
+    if (field === 'premise') return premise;
+    if (field === 'themes') return themes;
+    return takeaway;
+  }
+
+  function startEditSummaryField(field: SummaryField) {
+    setEditingSummaryField(field);
+    requestAnimationFrame(() => {
+      const node = summaryFieldRefs[field].current;
+      if (!node) return;
+      node.focus();
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    });
+  }
+
+  function saveSummaryField(field: SummaryField) {
+    const node = summaryFieldRefs[field].current;
+    const next = node?.textContent?.trim() || '';
+    const values = {
+      premise: field === 'premise' ? next : premise,
+      themes: field === 'themes' ? next : themes,
+      takeaway: field === 'takeaway' ? next : takeaway,
+    };
+    if (field === 'premise') setPremise(next);
+    else if (field === 'themes') setThemes(next);
+    else setTakeaway(next);
+    setEditingSummaryField(null);
+    saveSummary(values);
+  }
+
+  function cancelEditSummaryField(field: SummaryField) {
+    const node = summaryFieldRefs[field].current;
+    if (node) node.textContent = summaryFieldValue(field);
+    setEditingSummaryField(null);
   }
 
   function commitChapterReorder(chapterId: string, overIndex: number, others: Entry[]) {
@@ -325,7 +389,7 @@ export default function OutlineView({
 
       <div className="editor-scroll">
         <div className="outline-column">
-          <div className="outline-sticky-head">
+          <div className={`outline-sticky-head${scrolled ? ' is-scrolled' : ''}`}>
             <div className="outline-header-row">
               <div className={`outline-title-wrap${editingTitle ? ' editing' : ''}`}>
                 <h1
@@ -382,36 +446,66 @@ export default function OutlineView({
           <div className={`tab-panel${activeTab === 'overview' ? ' active' : ''}`}>
             <section className="outline-section" style={{ marginTop: 16 }}>
               <div className="summary-fields">
-                <label className="field-label">What is this story about?</label>
-                <textarea
-                  className="manifesto-textarea"
-                  value={premise}
-                  placeholder="A quick premise — who, what, why now…"
-                  onChange={(e) => setPremise(e.target.value)}
-                  onBlur={() => saveSummary({ premise, themes, takeaway })}
-                />
-                <label className="field-label" style={{ marginTop: 18 }}>
-                  General themes
-                </label>
-                <textarea
-                  className="manifesto-textarea"
-                  value={themes}
-                  placeholder="What ideas or tensions run through it?"
-                  onChange={(e) => setThemes(e.target.value)}
-                  onBlur={() => saveSummary({ premise, themes, takeaway })}
-                  style={{ minHeight: 80 }}
-                />
-                <label className="field-label" style={{ marginTop: 18 }}>
-                  Reader takeaway
-                </label>
-                <textarea
-                  className="manifesto-textarea"
-                  value={takeaway}
-                  placeholder="What should the reader feel or understand when they finish?"
-                  onChange={(e) => setTakeaway(e.target.value)}
-                  onBlur={() => saveSummary({ premise, themes, takeaway })}
-                  style={{ minHeight: 80 }}
-                />
+                <div className={`summary-field-wrap${editingSummaryField === 'premise' ? ' editing' : ''}`}>
+                  <label className="field-label">What is this story about?</label>
+                  <p
+                    ref={premiseRef}
+                    className={`summary-premise-text${!premise ? ' placeholder' : ''}`}
+                    contentEditable={editingSummaryField === 'premise'}
+                    suppressContentEditableWarning
+                    spellCheck={false}
+                    onKeyDown={(e) => e.key === 'Escape' && cancelEditSummaryField('premise')}
+                  >
+                    {premise || 'A quick premise — who, what, why now…'}
+                  </p>
+                  <button className="summary-edit-btn" onClick={() => startEditSummaryField('premise')}>
+                    Edit
+                  </button>
+                  <button className="summary-save-btn" onClick={() => saveSummaryField('premise')}>
+                    Save
+                  </button>
+                </div>
+
+                <div className="field-row">
+                  <div className={`summary-field-wrap field-group${editingSummaryField === 'themes' ? ' editing' : ''}`}>
+                    <label className="field-label">General themes</label>
+                    <p
+                      ref={themesRef}
+                      className={`summary-field-text${!themes ? ' placeholder' : ''}`}
+                      contentEditable={editingSummaryField === 'themes'}
+                      suppressContentEditableWarning
+                      spellCheck={false}
+                      onKeyDown={(e) => e.key === 'Escape' && cancelEditSummaryField('themes')}
+                    >
+                      {themes || 'What ideas or tensions run through it?'}
+                    </p>
+                    <button className="summary-edit-btn" onClick={() => startEditSummaryField('themes')}>
+                      Edit
+                    </button>
+                    <button className="summary-save-btn" onClick={() => saveSummaryField('themes')}>
+                      Save
+                    </button>
+                  </div>
+                  <div className={`summary-field-wrap field-group${editingSummaryField === 'takeaway' ? ' editing' : ''}`}>
+                    <label className="field-label">Reader takeaway</label>
+                    <p
+                      ref={takeawayRef}
+                      className={`summary-field-text${!takeaway ? ' placeholder' : ''}`}
+                      contentEditable={editingSummaryField === 'takeaway'}
+                      suppressContentEditableWarning
+                      spellCheck={false}
+                      onKeyDown={(e) => e.key === 'Escape' && cancelEditSummaryField('takeaway')}
+                    >
+                      {takeaway || 'What should the reader feel or understand when they finish?'}
+                    </p>
+                    <button className="summary-edit-btn" onClick={() => startEditSummaryField('takeaway')}>
+                      Edit
+                    </button>
+                    <button className="summary-save-btn" onClick={() => saveSummaryField('takeaway')}>
+                      Save
+                    </button>
+                  </div>
+                </div>
               </div>
             </section>
           </div>

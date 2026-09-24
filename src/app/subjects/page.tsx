@@ -43,7 +43,9 @@ export default async function SubjectsPage() {
     <div className="picker-wrap">
       <div className="picker-header">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo.png" alt="Storyright" className="picker-brand-wordmark" />
+        <img src="/logo.png" alt="Storyright" className="picker-brand-wordmark picker-brand-wordmark-dark" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-lightmode.png" alt="Storyright" className="picker-brand-wordmark picker-brand-wordmark-light" />
         <NewProjectButton />
       </div>
 

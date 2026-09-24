@@ -21,7 +21,9 @@ export default function LoginPage() {
       <div className="auth-tile">
         <div className="auth-card">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="storyright" className="brand-logo" />
+          <img src="/logo.png" alt="storyright" className="brand-logo brand-logo-dark" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-lightmode.png" alt="storyright" className="brand-logo brand-logo-light" />
           <p className="auth-tagline">
             A quiet place to write, with feedback tuned to your own voice.
           </p>
