@@ -8,6 +8,10 @@ export async function createSubject(formData: FormData) {
   const title = String(formData.get('title') || '').trim();
   if (!title) return;
 
+  const premise = String(formData.get('premise') || '').trim();
+  const themes = String(formData.get('themes') || '').trim();
+  const takeaway = String(formData.get('takeaway') || '').trim();
+
   const supabase = createClient();
   const {
     data: { user },
@@ -16,7 +20,13 @@ export async function createSubject(formData: FormData) {
 
   const { data: subject, error } = await supabase
     .from('subjects')
-    .insert({ user_id: user.id, title })
+    .insert({
+      user_id: user.id,
+      title,
+      ...(premise ? { premise } : {}),
+      ...(themes ? { themes } : {}),
+      ...(takeaway ? { takeaway } : {}),
+    })
     .select()
     .single();
 

@@ -432,10 +432,10 @@ a { color: inherit; }
   align-items: center;
   justify-content: center;
   gap: 16px;
-  border: 1px dashed var(--border);
   color: var(--text-tertiary);
   background: transparent;
 }
+.new-project-form { border: 1px dashed var(--border); }
 .new-project-card:hover { background: var(--bg-hover); }
 .new-project-title {
   font-family: var(--font-editor);
@@ -486,7 +486,7 @@ a { color: inherit; }
 .icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .icon-btn.active { background: var(--bg-pop); color: var(--text-primary); }
 .icon-btn.theme-toggle-btn { border-radius: 20px; }
-html[data-theme='light'] .icon-btn.theme-toggle-btn { background: var(--bg-pop); color: var(--text-pop); }
+html[data-theme='light'] .icon-btn.theme-toggle-btn { color: var(--text-pop); }
 html[data-theme='light'] .icon-btn.theme-toggle-btn:hover { background: var(--bg-hover); }
 
 .editor-scroll { flex: 1; overflow-y: auto; display: flex; justify-content: center; position: relative; }
@@ -850,8 +850,55 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
 .outline-empty { font-size: 13px; color: var(--text-tertiary); line-height: 1.6; margin: 0; }
 .summary-fields .field-label:first-child { margin-top: 0; }
 
+/* ---------- New Story page (mirrors editoir-outline-prototype.html) ---------- */
+.new-story-heading { font-family: var(--font-editor); font-size: 19px; font-weight: 500; color: var(--text-primary); margin: 0; }
+.new-story-title-block { margin-top: 48px; }
+.new-story-eyebrow { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); margin: 0 0 16px; }
+.new-story-title-input {
+  display: block;
+  width: 100%;
+  font-family: var(--font-editor);
+  font-size: 30px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0 0 24px;
+}
+.new-story-title-input::placeholder { color: var(--bg-elevated); }
+.new-story-title-input:focus { outline: none; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 24px; align-items: start; }
+.field-group { display: flex; flex-direction: column; }
+.new-story-footer { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 96px; }
+.new-story-warning { font-size: 12.5px; color: var(--danger-text); min-height: 1em; }
+.new-story-actions { display: flex; align-items: center; gap: 20px; }
+.new-story-cancel-btn { font-size: 13px; color: var(--text-secondary); padding: 9px 16px; border-radius: 20px; }
+.new-story-cancel-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.new-story-start-btn {
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: 20px;
+  background: var(--bg-pop);
+  color: var(--text-pop);
+  opacity: 0.5;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.new-story-start-btn.enabled { opacity: 1; }
+.new-story-start-btn.enabled:hover { background: var(--text-pop); color: var(--bg-pop); }
+.new-story-start-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Dashed-border "Add new" tiles — exact 10px dash / 10px gap per Figma spec.
+   CSS border-style: dashed can't guarantee an exact dash length, so this is
+   drawn with an absolutely-positioned inline SVG rect instead. Add
+   `<svg class="dashed-outline" ...><rect .../></svg>` as the first child of
+   any element using this class, and give that element position: relative. */
+.dashed-outline { position: absolute; inset: 0; pointer-events: none; }
+
 /* Empty-state tiles (Chapters/Characters/Places/Threads, matches prototype) */
 .empty-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -860,7 +907,6 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
   height: 300px;
   padding: 30px 20px;
   box-sizing: border-box;
-  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: transparent;
   text-align: center;
@@ -902,13 +948,13 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
 /* Chapters */
 .chapter-list { display: flex; flex-direction: column; gap: 10px; }
 .chapter-add-tile {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
   width: 100%;
   padding: 18px;
-  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-tertiary);
@@ -1175,6 +1221,7 @@ body.is-reordering .chapter-row:hover .chapter-edit-link { opacity: 0; pointer-e
 }
 .entity-card:hover .entity-delete-btn { opacity: 1; pointer-events: auto; }
 .entity-add-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1182,7 +1229,6 @@ body.is-reordering .chapter-row:hover .chapter-edit-link { opacity: 0; pointer-e
   gap: 8px;
   min-height: 108px;
   padding: 14px;
-  border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: transparent;
   color: var(--text-tertiary);

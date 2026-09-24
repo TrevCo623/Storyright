@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
+import DashedOutline from '@/components/DashedOutline';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import TrashIcon from '@/components/icons/TrashIcon';
 import type { Character, Entry, OutlineReview, OutlineSuggestionCategory, Place } from '@/lib/types';
@@ -421,6 +422,7 @@ export default function OutlineView({
               <div className="chapter-list">
                 {chapters.length === 0 ? (
                   <button className="empty-tile" onClick={() => setChapterDialogOpen(true)}>
+                    <DashedOutline />
                     <div className="empty-tile-title">Add some good bones to your story.</div>
                     <div className="empty-tile-circle">+</div>
                   </button>
@@ -485,6 +487,7 @@ export default function OutlineView({
                       return nodes;
                     })()}
                     <button className="chapter-add-tile" onClick={() => setChapterDialogOpen(true)}>
+                      <DashedOutline />
                       <span className="chapter-add-tile-circle">+</span>
                       <span>Add a new chapter</span>
                     </button>
@@ -547,6 +550,7 @@ export default function OutlineView({
               <div className="entity-grid">
                 {characters.length === 0 ? (
                   <button className="empty-tile" onClick={() => setAddingCharacter(true)}>
+                    <DashedOutline />
                     <div className="empty-tile-title">Tell us who brings your story to life.</div>
                     <div className="empty-tile-circle">+</div>
                   </button>
@@ -575,6 +579,7 @@ export default function OutlineView({
                       />
                     ))}
                     <button className="entity-add-tile" onClick={() => setAddingCharacter(true)}>
+                      <DashedOutline />
                       <span className="chapter-add-tile-circle">+</span>
                       <span>Add a new character</span>
                     </button>
@@ -622,6 +627,7 @@ export default function OutlineView({
               <div className="entity-grid">
                 {places.length === 0 ? (
                   <button className="empty-tile" onClick={() => setAddingPlace(true)}>
+                    <DashedOutline />
                     <div className="empty-tile-title">Show us where your story unfolds.</div>
                     <div className="empty-tile-circle">+</div>
                   </button>
@@ -649,6 +655,7 @@ export default function OutlineView({
                       />
                     ))}
                     <button className="entity-add-tile" onClick={() => setAddingPlace(true)}>
+                      <DashedOutline />
                       <span className="chapter-add-tile-circle">+</span>
                       <span>Add a new place</span>
                     </button>
@@ -698,6 +705,7 @@ export default function OutlineView({
               <div className="entity-grid">
                 {threads.length === 0 ? (
                   <button className="empty-tile" onClick={() => setAddingThread(true)}>
+                    <DashedOutline />
                     <div className="empty-tile-title">Track the threads that tie it all together.</div>
                     <div className="empty-tile-desc">
                       A place for unfinished thoughts, ideas, and loose threads that you&rsquo;re not
@@ -726,6 +734,7 @@ export default function OutlineView({
                       />
                     ))}
                     <button className="entity-add-tile" onClick={() => setAddingThread(true)}>
+                      <DashedOutline />
                       <span className="chapter-add-tile-circle">+</span>
                       <span>Add a new thread</span>
                     </button>
