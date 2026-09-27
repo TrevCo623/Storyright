@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
+import TextSizeControl from '@/components/TextSizeControl';
 import { createSubject } from '@/app/subjects/actions';
 
 function joinWithAnd(list: string[]) {
@@ -43,6 +44,7 @@ export default function NewStoryView() {
             ‹ See all projects
           </Link>
           <div className="topbar-right">
+            <TextSizeControl />
             <ThemeToggle />
           </div>
         </header>

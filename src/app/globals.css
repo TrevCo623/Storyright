@@ -8,6 +8,9 @@
   --font-editor: 'Newsreader', Georgia, serif;
   --rail-width: 260px;
   --nav-width: 240px;
+  /* Content text-size control (3 steps: 1 / 1.2 / 1.4). Only applied to
+     prose/content text, not UI chrome — see TextSizeControl.tsx. */
+  --text-scale: 1;
 }
 
 html[data-theme='dark'] {
@@ -365,7 +368,7 @@ html[data-theme='light'] .picker-brand-wordmark-light { display: block; }
 .picker-logout-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
 .picker-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 258px);
+  grid-template-columns: repeat(auto-fill, calc(258px * var(--text-scale)));
   gap: 16px;
   max-width: 1140px;
   margin: 0 auto;
@@ -375,8 +378,8 @@ html[data-theme='light'] .picker-brand-wordmark-light { display: block; }
   display: flex;
   flex-direction: column;
   gap: 20px;
-  width: 258px;
-  height: 300px;
+  width: calc(258px * var(--text-scale));
+  height: calc(300px * var(--text-scale));
   box-sizing: border-box;
   border-radius: var(--radius-md);
   padding: 24px 20px;
@@ -393,12 +396,12 @@ html[data-theme='light'] .picker-brand-wordmark-light { display: block; }
 .project-card-top { display: flex; flex-direction: column; gap: 4px; }
 .project-card-title {
   font-family: var(--font-editor);
-  font-size: 17px;
+  font-size: calc(17px * var(--text-scale));
   color: var(--text-primary);
 }
 .project-card-meta { font-size: 12px; color: var(--text-tertiary); }
 .project-card-summary {
-  font-size: 12.5px;
+  font-size: calc(12.5px * var(--text-scale));
   line-height: 1.55;
   color: var(--text-secondary);
   margin: 0;
@@ -505,11 +508,31 @@ html[data-theme='light'] .picker-brand-wordmark-light { display: block; }
 html[data-theme='light'] .icon-btn.theme-toggle-btn { color: var(--text-pop); }
 html[data-theme='light'] .icon-btn.theme-toggle-btn:hover { background: var(--bg-hover); }
 
+/* Text-size control (A- / A / A+) — sits beside the theme toggle, roughly
+   the same height as .icon-btn (26px). No hover background on the +/-
+   buttons themselves, per spec: secondary color at rest, primary on hover,
+   tertiary + inert when a limit is reached. */
+.text-size-control { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 2px; user-select: none; }
+.text-size-label { font-size: 12px; font-weight: 600; color: var(--text-tertiary); line-height: 1; }
+.text-size-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 26px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-secondary);
+  transition: color 0.15s ease;
+}
+.text-size-btn:hover { color: var(--text-primary); }
+.text-size-btn.is-disabled { color: var(--text-tertiary); cursor: default; pointer-events: none; }
+
 .editor-scroll { flex: 1; overflow-y: auto; display: flex; justify-content: center; position: relative; }
 .editor-column { width: 100%; max-width: 640px; padding: 56px 24px 100px; }
 .doc-title {
   font-family: var(--font-editor);
-  font-size: 30px;
+  font-size: calc(30px * var(--text-scale));
   font-weight: 500;
   color: var(--text-primary);
   outline: none;
@@ -522,7 +545,7 @@ html[data-theme='light'] .icon-btn.theme-toggle-btn:hover { background: var(--bg
 
 .ProseMirror {
   font-family: var(--font-editor);
-  font-size: 17.5px;
+  font-size: calc(17.5px * var(--text-scale));
   line-height: 1.8;
   color: var(--text-primary);
   outline: none;
@@ -641,10 +664,12 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
 }
 
 /* ---------- Suggestions rail ---------- */
+/* No background fill — this is a toggleable notes panel, not a docked
+   sidebar, so it should blend with the app background (see EntryEditor.tsx
+   rail-toggle button). Items stagger in on open via rail-item-in below. */
 .rail {
   width: var(--rail-width);
   flex: none;
-  background: var(--bg-storyright);
   display: flex;
   flex-direction: column;
   transition: width 0.2s ease;
@@ -658,13 +683,18 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
   width: var(--rail-width);
 }
 .rail-inner { flex: 1; overflow-y: auto; padding: 8px 16px 16px; width: var(--rail-width); box-sizing: border-box; }
-.rail-empty { font-size: 12.5px; line-height: 1.6; color: var(--text-tertiary); padding: 12px 4px; }
+@keyframes rail-item-in {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.rail-empty { font-size: 12.5px; line-height: 1.6; color: var(--text-tertiary); padding: 12px 4px; animation: rail-item-in 0.3s ease both; }
 .suggestion-item {
   position: relative;
   padding: 10px 12px;
   border-radius: 6px;
   margin-bottom: 4px;
   cursor: pointer;
+  animation: rail-item-in 0.3s ease both;
 }
 .suggestion-item:hover, .suggestion-item.active-item { background: var(--bg-hover); }
 .suggestion-item .head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
@@ -898,8 +928,8 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
   cursor: text;
   transition: background 0.15s ease;
 }
-.summary-premise-text { font-size: 22px; line-height: 1.5; }
-.summary-field-text { font-size: 15px; line-height: 1.6; }
+.summary-premise-text { font-size: calc(22px * var(--text-scale)); line-height: 1.5; }
+.summary-field-text { font-size: calc(15px * var(--text-scale)); line-height: 1.6; }
 .summary-premise-text.placeholder,
 .summary-field-text.placeholder { color: var(--text-tertiary); }
 .summary-premise-text:hover,
@@ -1161,9 +1191,9 @@ body.is-reordering .chapter-row:hover .chapter-edit-link { opacity: 0; pointer-e
 }
 .chapter-eyebrow { font-size: 11px; font-weight: 400; color: var(--text-secondary); margin: 0 0 10px; padding-right: 56px; }
 .chapter-row-head { display: flex; align-items: center; margin-bottom: 10px; padding-right: 56px; }
-.chapter-title-text { flex: 1; font-family: var(--font-editor); font-size: 24px; font-weight: 400; line-height: 1.2; color: var(--text-pop); }
-.chapter-synopsis-text { font-size: 14px; line-height: 1.55; color: var(--text-pop); margin: 0 0 14px; padding-right: 140px; }
-.chapter-feeling-text { font-size: 13px; line-height: 1.5; color: var(--text-primary); margin: 0; padding-right: 140px; }
+.chapter-title-text { flex: 1; font-family: var(--font-editor); font-size: calc(24px * var(--text-scale)); font-weight: 400; line-height: 1.2; color: var(--text-pop); }
+.chapter-synopsis-text { font-size: calc(14px * var(--text-scale)); line-height: 1.55; color: var(--text-pop); margin: 0 0 14px; padding-right: 140px; }
+.chapter-feeling-text { font-size: calc(13px * var(--text-scale)); line-height: 1.5; color: var(--text-primary); margin: 0; padding-right: 140px; }
 .chapter-feeling-label { color: var(--text-secondary); }
 .chapter-synopsis-text.placeholder, .chapter-feeling-text.placeholder, .chapter-title-text.placeholder { color: var(--text-tertiary); font-style: italic; }
 
@@ -1270,9 +1300,9 @@ body.is-reordering .chapter-row:hover .chapter-edit-link { opacity: 0; pointer-e
 }
 .entity-card:hover { background: var(--bg-hover); }
 .entity-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-.entity-name { font-family: var(--font-editor); font-size: 24px; font-weight: 400; line-height: 1.2; color: var(--text-pop); }
+.entity-name { font-family: var(--font-editor); font-size: calc(24px * var(--text-scale)); font-weight: 400; line-height: 1.2; color: var(--text-pop); }
 .entity-role { font-size: 11px; font-weight: 400; color: var(--text-secondary); margin: -4px 0 10px; }
-.entity-summary { font-size: 14px; line-height: 1.55; color: var(--text-pop); margin: 0; }
+.entity-summary { font-size: calc(14px * var(--text-scale)); line-height: 1.55; color: var(--text-pop); margin: 0; }
 .auto-badge {
   display: inline-flex;
   align-items: center;

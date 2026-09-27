@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
 import ThemeToggle from '@/components/ThemeToggle';
+import TextSizeControl from '@/components/TextSizeControl';
 import { useNav } from '@/components/AppShell/NavContext';
 import {
   SuggestionHighlight,
@@ -471,18 +472,23 @@ export default function EntryEditor({ subjectId, entry, sectionLabel }: Props) {
                 <line x1="10.1" y1="10.1" x2="13.6" y2="13.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
               </svg>
             </button>
+            <TextSizeControl />
             <ThemeToggle />
             <button className="icon-btn" title="Export as Markdown" onClick={exportMarkdown}>
               ⬇
             </button>
             <button
               className={`icon-btn${railOpen ? '' : ' active'}`}
-              title={railOpen ? 'Close suggestions sidebar' : 'Open suggestions sidebar'}
+              title={railOpen ? 'Hide notes' : 'Show notes'}
               onClick={() => setRailOpen((v) => !v)}
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
-                <rect x="9.8" y="3.15" width="4.35" height="9.7" rx="0.5" fill="currentColor" />
+                <path
+                  d="M2 3.8C2 2.80589 2.80589 2 3.8 2H12.2C13.1941 2 14 2.80589 14 3.8V9.4C14 10.3941 13.1941 11.2 12.2 11.2H6.4L3.4 13.6V11.2H3.8C2.80589 11.2 2 10.3941 2 9.4V3.8Z"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinejoin="round"
+                />
               </svg>
             </button>
           </div>
@@ -523,10 +529,11 @@ export default function EntryEditor({ subjectId, entry, sectionLabel }: Props) {
             {orderedSuggestions.length === 0 ? (
               <p className="rail-empty">Click Review to get feedback on this piece.</p>
             ) : (
-              orderedSuggestions.map((s) => (
+              orderedSuggestions.map((s, i) => (
                 <div
                   key={s.id}
                   data-rail-id={s.id}
+                  style={{ animationDelay: `${i * 70}ms` }}
                   className={`suggestion-item${activeId === s.id ? ' active-item' : ''}${
                     editingIds.has(s.id) ? ' editing' : ''
                   }`}

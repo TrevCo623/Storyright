@@ -93,13 +93,6 @@ export default function Sidebar({
                 <span>Characters</span>
                 <span className="nav-accordion-chevron">›</span>
               </button>
-              <Link
-                href={`/subjects/${subjectId}?tab=characters&new=1`}
-                className="nav-add-btn"
-                title="Add character"
-              >
-                +
-              </Link>
             </div>
             <div className="nav-accordion-content">
               {characters.length ? (
@@ -124,9 +117,6 @@ export default function Sidebar({
                 <span>Places</span>
                 <span className="nav-accordion-chevron">›</span>
               </button>
-              <Link href={`/subjects/${subjectId}?tab=places&new=1`} className="nav-add-btn" title="Add place">
-                +
-              </Link>
             </div>
             <div className="nav-accordion-content">
               {places.length ? (
@@ -147,9 +137,6 @@ export default function Sidebar({
                 <span>Threads</span>
                 <span className="nav-accordion-chevron">›</span>
               </button>
-              <Link href={`/subjects/${subjectId}?tab=threads&new=1`} className="nav-add-btn" title="Add thread">
-                +
-              </Link>
             </div>
             <div className="nav-accordion-content">
               {threads.length ? (

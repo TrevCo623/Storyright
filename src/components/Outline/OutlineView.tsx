@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
+import TextSizeControl from '@/components/TextSizeControl';
 import DashedOutline from '@/components/DashedOutline';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import TrashIcon from '@/components/icons/TrashIcon';
@@ -383,6 +384,7 @@ export default function OutlineView({
           ‹ See all projects
         </Link>
         <div className="topbar-right">
+          <TextSizeControl />
           <ThemeToggle />
         </div>
       </header>

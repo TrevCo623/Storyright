@@ -4,6 +4,7 @@ import NewSubjectCard from '@/components/NewSubjectCard';
 import NewProjectButton from '@/components/NewProjectButton';
 import ProjectCard from '@/components/ProjectCard';
 import ThemeToggle from '@/components/ThemeToggle';
+import TextSizeControl from '@/components/TextSizeControl';
 
 function relativeTime(iso: string) {
   const diffMs = Date.now() - new Date(iso).getTime();
@@ -69,6 +70,7 @@ export default async function SubjectsPage() {
       )}
 
       <div className="picker-footer-controls">
+        <TextSizeControl />
         <ThemeToggle />
         <form action="/auth/signout" method="post">
           <button type="submit" className="picker-logout-btn">
