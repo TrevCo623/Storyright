@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import DashedOutline from '@/components/DashedOutline';
+import { PlusIcon } from '@/components/icons';
 
 export default function NewSubjectCard() {
   const router = useRouter();
@@ -10,7 +11,7 @@ export default function NewSubjectCard() {
     <button className="project-card new-project-card" onClick={() => router.push('/subjects/new')}>
       <DashedOutline />
       <div className="new-project-title">New project</div>
-      <div className="new-project-circle">+</div>
+      <div className="new-project-circle"><PlusIcon size={18} /></div>
     </button>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
 import TextSizeControl from '@/components/TextSizeControl';
+import { ArrowLeftIcon } from '@/components/icons';
 import { createSubject } from '@/app/subjects/actions';
 
 function joinWithAnd(list: string[]) {
@@ -41,7 +42,7 @@ export default function NewStoryView() {
       <main className="editor-area outline-area">
         <header className="topbar">
           <Link href="/subjects" className="nav-back-link">
-            ‹ See all projects
+            <ArrowLeftIcon /> See all projects
           </Link>
           <div className="topbar-right">
             <TextSizeControl />

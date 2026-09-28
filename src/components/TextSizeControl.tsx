@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MinusIcon, PlusIcon } from '@/components/icons';
 
 // Three steps only: current baseline (1em), then +0.2em increments.
 // Scales content/prose text via the --text-scale CSS var (see globals.css) —
@@ -36,7 +37,7 @@ export default function TextSizeControl() {
         aria-label="Decrease text size"
         onClick={() => apply(index - 1)}
       >
-        −
+        <MinusIcon size={12} />
       </button>
       <span className="text-size-label">A</span>
       <button
@@ -46,7 +47,7 @@ export default function TextSizeControl() {
         aria-label="Increase text size"
         onClick={() => apply(index + 1)}
       >
-        +
+        <PlusIcon size={12} />
       </button>
     </div>
   );

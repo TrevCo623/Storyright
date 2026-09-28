@@ -8,6 +8,7 @@ import CharacterCount from '@tiptap/extension-character-count';
 import ThemeToggle from '@/components/ThemeToggle';
 import TextSizeControl from '@/components/TextSizeControl';
 import { useNav } from '@/components/AppShell/NavContext';
+import { PanelLeftIcon, SearchIcon, MessageSquareIcon, ArrowDownIcon, XIcon } from '@/components/icons';
 import {
   SuggestionHighlight,
   setSuggestionDecorations,
@@ -453,10 +454,7 @@ export default function EntryEditor({ subjectId, entry, sectionLabel }: Props) {
               title={navOpen ? 'Close chapter list' : 'Open chapter list'}
               onClick={toggleNav}
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
-                <rect x="1.85" y="3.15" width="4.35" height="9.7" rx="0.5" fill="currentColor" />
-              </svg>
+              <PanelLeftIcon />
             </button>
             <div className="breadcrumb">
               {sectionLabel} / {title || 'Untitled'}
@@ -467,29 +465,19 @@ export default function EntryEditor({ subjectId, entry, sectionLabel }: Props) {
               {liveWordCount} words · {readingTime} min read
             </span>
             <button className="icon-btn" title="Search this project" onClick={() => setToast('Project search is coming soon')}>
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="6.8" cy="6.8" r="4.3" stroke="currentColor" strokeWidth="1.3" />
-                <line x1="10.1" y1="10.1" x2="13.6" y2="13.6" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-              </svg>
+              <SearchIcon />
             </button>
             <TextSizeControl />
             <ThemeToggle />
             <button className="icon-btn" title="Export as Markdown" onClick={exportMarkdown}>
-              ⬇
+              <ArrowDownIcon />
             </button>
             <button
               className={`icon-btn${railOpen ? '' : ' active'}`}
               title={railOpen ? 'Hide notes' : 'Show notes'}
               onClick={() => setRailOpen((v) => !v)}
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path
-                  d="M2 3.8C2 2.80589 2.80589 2 3.8 2H12.2C13.1941 2 14 2.80589 14 3.8V9.4C14 10.3941 13.1941 11.2 12.2 11.2H6.4L3.4 13.6V11.2H3.8C2.80589 11.2 2 10.3941 2 9.4V3.8Z"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <MessageSquareIcon />
             </button>
           </div>
         </header>
@@ -590,7 +578,7 @@ export default function EntryEditor({ subjectId, entry, sectionLabel }: Props) {
             <div className="advice-header">
               <span>Ask about this</span>
               <button className="icon-btn" onClick={() => setAdviceOpen(false)} aria-label="Close">
-                ✕
+                <XIcon />
               </button>
             </div>
             <div className="advice-selected">&ldquo;{adviceSelectedText}&rdquo;</div>

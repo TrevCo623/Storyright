@@ -8,6 +8,7 @@ import TextSizeControl from '@/components/TextSizeControl';
 import DashedOutline from '@/components/DashedOutline';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import TrashIcon from '@/components/icons/TrashIcon';
+import { ArrowLeftIcon, XIcon, GripVerticalIcon, PlusIcon } from '@/components/icons';
 import type { Character, Entry, OutlineReview, OutlineSuggestionCategory, Place } from '@/lib/types';
 import { createEntry, deleteEntry, renameEntry } from '@/app/subjects/[subjectId]/actions';
 import {
@@ -381,7 +382,7 @@ export default function OutlineView({
       <main className="editor-area outline-area">
       <header className="topbar">
         <Link href="/subjects" className="nav-back-link">
-          ‹ See all projects
+          <ArrowLeftIcon /> See all projects
         </Link>
         <div className="topbar-right">
           <TextSizeControl />
@@ -535,7 +536,7 @@ export default function OutlineView({
                   <button className="empty-tile" onClick={() => setChapterDialogOpen(true)}>
                     <DashedOutline />
                     <div className="empty-tile-title">Add some good bones to your story.</div>
-                    <div className="empty-tile-circle">+</div>
+                    <div className="empty-tile-circle"><PlusIcon size={18} /></div>
                   </button>
                 ) : (
                   <>
@@ -599,7 +600,7 @@ export default function OutlineView({
                     })()}
                     <button className="chapter-add-tile" onClick={() => setChapterDialogOpen(true)}>
                       <DashedOutline />
-                      <span className="chapter-add-tile-circle">+</span>
+                      <span className="chapter-add-tile-circle"><PlusIcon /></span>
                       <span>Add a new chapter</span>
                     </button>
                   </>
@@ -663,7 +664,7 @@ export default function OutlineView({
                   <button className="empty-tile" onClick={() => setAddingCharacter(true)}>
                     <DashedOutline />
                     <div className="empty-tile-title">Tell us who brings your story to life.</div>
-                    <div className="empty-tile-circle">+</div>
+                    <div className="empty-tile-circle"><PlusIcon size={18} /></div>
                   </button>
                 ) : (
                   <>
@@ -691,7 +692,7 @@ export default function OutlineView({
                     ))}
                     <button className="entity-add-tile" onClick={() => setAddingCharacter(true)}>
                       <DashedOutline />
-                      <span className="chapter-add-tile-circle">+</span>
+                      <span className="chapter-add-tile-circle"><PlusIcon /></span>
                       <span>Add a new character</span>
                     </button>
                   </>
@@ -740,7 +741,7 @@ export default function OutlineView({
                   <button className="empty-tile" onClick={() => setAddingPlace(true)}>
                     <DashedOutline />
                     <div className="empty-tile-title">Show us where your story unfolds.</div>
-                    <div className="empty-tile-circle">+</div>
+                    <div className="empty-tile-circle"><PlusIcon size={18} /></div>
                   </button>
                 ) : (
                   <>
@@ -767,7 +768,7 @@ export default function OutlineView({
                     ))}
                     <button className="entity-add-tile" onClick={() => setAddingPlace(true)}>
                       <DashedOutline />
-                      <span className="chapter-add-tile-circle">+</span>
+                      <span className="chapter-add-tile-circle"><PlusIcon /></span>
                       <span>Add a new place</span>
                     </button>
                   </>
@@ -822,7 +823,7 @@ export default function OutlineView({
                       A place for unfinished thoughts, ideas, and loose threads that you&rsquo;re not
                       ready to add yet.
                     </div>
-                    <div className="empty-tile-circle">+</div>
+                    <div className="empty-tile-circle"><PlusIcon size={18} /></div>
                   </button>
                 ) : (
                   <>
@@ -846,7 +847,7 @@ export default function OutlineView({
                     ))}
                     <button className="entity-add-tile" onClick={() => setAddingThread(true)}>
                       <DashedOutline />
-                      <span className="chapter-add-tile-circle">+</span>
+                      <span className="chapter-add-tile-circle"><PlusIcon /></span>
                       <span>Add a new thread</span>
                     </button>
                   </>
@@ -863,7 +864,7 @@ export default function OutlineView({
             <div className="advice-header">
               <span>Outline review</span>
               <button className="icon-btn" onClick={() => setReviewOpen(false)}>
-                ✕
+                <XIcon />
               </button>
             </div>
             <div className="advice-thread">
@@ -969,7 +970,7 @@ function ChapterRow({
             title="Drag to reorder"
             onMouseDown={onGrabHandle}
           >
-            ⠿
+            <GripVerticalIcon />
           </span>
         )}
       </div>

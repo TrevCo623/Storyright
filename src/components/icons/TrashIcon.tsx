@@ -1,6 +1,6 @@
-// Shared trash-can icon — matches the prototype's TRASH_SVG constant, used
-// for every delete affordance (chapter rows, entity cards, project cards)
-// instead of a plain "✕" glyph.
+// Shared trash-can icon — Lucide "trash-2" geometry, matching the rest of
+// the app's icon set (stroke 2, 24×24 viewBox, round caps/joins). Used for
+// every delete affordance (chapter rows, entity cards, project cards).
 export default function TrashIcon({ size = 14 }: { size?: number }) {
   return (
     <svg
@@ -9,15 +9,15 @@ export default function TrashIcon({ size = 14 }: { size?: number }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.8}
+      strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-      <path d="M10 11v6" />
-      <path d="M14 11v6" />
-      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+      <path d="M3 6h18" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" x2="10" y1="11" y2="17" />
+      <line x1="14" x2="14" y1="11" y2="17" />
     </svg>
   );
 }

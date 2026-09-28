@@ -225,6 +225,9 @@ html[data-theme='light'] .auth-card .brand-logo-light { display: inline-block; }
   align-items: center;
 }
 .nav-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12.5px;
   color: var(--text-secondary);
   padding: 5px 7px;
@@ -239,7 +242,9 @@ html[data-theme='light'] .auth-card .brand-logo-light { display: inline-block; }
   margin: 20px 0;
 }
 .nav-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 7px;
   width: 100%;
   text-align: left;
   font-size: 13px;

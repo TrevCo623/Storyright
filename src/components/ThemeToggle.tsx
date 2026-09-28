@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { MoonIcon, SunIcon } from '@/components/icons';
 
 export default function ThemeToggle() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
@@ -19,7 +20,7 @@ export default function ThemeToggle() {
 
   return (
     <button className="icon-btn theme-toggle-btn" title="Toggle theme" onClick={toggle}>
-      {theme === 'dark' ? '☾' : '☀'}
+      {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
     </button>
   );
 }

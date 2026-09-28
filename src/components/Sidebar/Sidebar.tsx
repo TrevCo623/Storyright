@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import type { Character, Entry, OutlineSuggestion, OutlineSuggestionCategory, Place } from '@/lib/types';
+import { ArrowLeftIcon, ListIcon, ChevronRightIcon, PlusIcon } from '@/components/icons';
 
 type NavSection = 'chapters' | 'characters' | 'places' | 'threads' | 'insights';
 
@@ -47,12 +48,12 @@ export default function Sidebar({
       <div className="nav-inner">
         <div className="nav-header">
           <Link href={`/subjects/${subjectId}`} className="nav-back-link">
-            ‹ Back to Outline
+            <ArrowLeftIcon /> Back to Outline
           </Link>
         </div>
         <div className="nav-project-name">{subjectTitle}</div>
         <Link href={`/subjects/${subjectId}`} className="nav-item">
-          ◈ Outline
+          <ListIcon /> Outline
         </Link>
 
         <div className="nav-accordion-group">
@@ -60,14 +61,14 @@ export default function Sidebar({
             <div className="nav-section-row">
               <button className="nav-section-label nav-accordion-toggle" onClick={() => toggle('chapters')}>
                 <span>Chapters</span>
-                <span className="nav-accordion-chevron">›</span>
+                <span className="nav-accordion-chevron"><ChevronRightIcon /></span>
               </button>
               <Link
                 href={`/subjects/${subjectId}?tab=chapters&new=1`}
                 className="nav-add-btn"
                 title="Add chapter"
               >
-                +
+                <PlusIcon size={13} />
               </Link>
             </div>
             <div className="nav-accordion-content">
@@ -91,7 +92,7 @@ export default function Sidebar({
             <div className="nav-section-row">
               <button className="nav-section-label nav-accordion-toggle" onClick={() => toggle('characters')}>
                 <span>Characters</span>
-                <span className="nav-accordion-chevron">›</span>
+                <span className="nav-accordion-chevron"><ChevronRightIcon /></span>
               </button>
             </div>
             <div className="nav-accordion-content">
@@ -115,7 +116,7 @@ export default function Sidebar({
             <div className="nav-section-row">
               <button className="nav-section-label nav-accordion-toggle" onClick={() => toggle('places')}>
                 <span>Places</span>
-                <span className="nav-accordion-chevron">›</span>
+                <span className="nav-accordion-chevron"><ChevronRightIcon /></span>
               </button>
             </div>
             <div className="nav-accordion-content">
@@ -135,7 +136,7 @@ export default function Sidebar({
             <div className="nav-section-row">
               <button className="nav-section-label nav-accordion-toggle" onClick={() => toggle('threads')}>
                 <span>Threads</span>
-                <span className="nav-accordion-chevron">›</span>
+                <span className="nav-accordion-chevron"><ChevronRightIcon /></span>
               </button>
             </div>
             <div className="nav-accordion-content">
@@ -159,7 +160,7 @@ export default function Sidebar({
             <div className="nav-section-row">
               <button className="nav-section-label nav-accordion-toggle" onClick={() => toggle('insights')}>
                 <span>Insights</span>
-                <span className="nav-accordion-chevron">›</span>
+                <span className="nav-accordion-chevron"><ChevronRightIcon /></span>
               </button>
             </div>
             <div className="nav-accordion-content">
