@@ -954,51 +954,48 @@ html[data-theme='light'] .review-btn.loading { opacity: 0.75; }
    the text's left edge relative to the label/Edit link above/below it). */
 .summary-field-wrap { position: relative; margin-bottom: 40px; }
 .summary-field-wrap:last-child { margin-bottom: 0; }
+/* Hover/edit box: the text plus a button row that always keeps its space, so
+   Edit (or Cancel + Save) sits inside the highlight at the bottom-right — the
+   same pattern as a hovered note in the editor and the chapter tiles. Bled out
+   with negative margin so the text's left edge stays aligned with the label. */
+.summary-box {
+  margin: 12px -12px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  cursor: text;
+  transition: background 0.15s ease;
+}
+.summary-field-wrap:hover .summary-box,
+.summary-field-wrap.editing .summary-box { background: var(--suggestion-rest); }
 .summary-premise-text,
 .summary-field-text {
   font-family: var(--font-editor);
   font-weight: 400;
   color: var(--text-primary);
-  margin: 12px -10px 0;
-  padding: 6px 10px;
-  border-radius: var(--radius-sm);
+  margin: 0;
   outline: none;
-  cursor: text;
-  transition: background 0.15s ease;
 }
 .summary-premise-text { font-size: calc(22px * var(--text-scale)); line-height: 1.5; }
 .summary-field-text { font-size: calc(15px * var(--text-scale)); line-height: 1.6; }
 .summary-premise-text.placeholder,
 .summary-field-text.placeholder { color: var(--text-tertiary); }
-.summary-premise-text:hover,
-.summary-field-text:hover { background: var(--suggestion-rest); }
-.summary-field-wrap.editing .summary-premise-text,
-.summary-field-wrap.editing .summary-field-text { background: none; }
-.summary-edit-btn {
-  display: block;
-  margin-top: 10px;
-  font-size: 12.5px;
-  color: var(--text-tertiary);
+.summary-box-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  margin-top: 8px;
   opacity: 0;
-  transition: opacity 0.12s ease, color 0.12s ease;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
 }
-.summary-field-wrap:hover .summary-edit-btn { opacity: 1; }
-.summary-edit-btn:hover { color: var(--text-primary); }
-.summary-edit-actions { display: none; align-items: center; gap: 16px; margin-top: 10px; }
-.summary-save-btn {
-  font-size: 13px;
-  font-weight: 500;
-  padding: 7px 14px;
-  border-radius: 20px;
-  background: var(--bg-pop);
-  color: var(--text-pop);
-  transition: background 0.15s ease, color 0.15s ease;
-}
-.summary-save-btn:hover { background: var(--text-pop); color: var(--bg-pop); }
-.summary-cancel-btn { font-size: 13px; color: var(--text-secondary); }
-.summary-cancel-btn:hover { color: var(--text-primary); }
-.summary-field-wrap.editing .summary-edit-btn { display: none; }
-.summary-field-wrap.editing .summary-edit-actions { display: flex; }
+.summary-field-wrap:hover .summary-box-actions,
+.summary-field-wrap.editing .summary-box-actions,
+.summary-box:focus-within .summary-box-actions { opacity: 1; pointer-events: auto; }
+/* Confirm action (Save) — white pill, same "on" treatment as the notes toggle. */
+.action-btn.action-btn-primary { background: var(--text-pop); color: var(--bg-editor); }
+.action-btn.action-btn-primary:hover { background: var(--text-pop); color: var(--bg-editor); opacity: 0.88; }
 
 /* ---------- New Story page (mirrors editoir-outline-prototype.html) ---------- */
 .new-story-heading { font-family: var(--font-editor); font-size: 19px; font-weight: 500; color: var(--text-primary); margin: 0; }
