@@ -8,6 +8,16 @@ export type SuggestionOutcome = 'done' | 'dismissed';
 export type EntitySource = 'manual' | 'auto';
 export type OutlineSuggestionCategory = 'chapter' | 'character' | 'place' | 'theme';
 
+// One hit in the chapter editor's project-wide search (see searchSubject in
+// subjects/[subjectId]/actions.ts and the search overlay in EntryEditor.tsx).
+export interface SearchResult {
+  kind: 'chapter' | 'thread' | 'character' | 'place';
+  id: string;
+  breadcrumb: string;
+  title: string;
+  snippet: string;
+}
+
 export interface SuggestionDef {
   id: string;
   category: SuggestionCategory;

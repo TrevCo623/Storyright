@@ -1,14 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import CharacterCount from '@tiptap/extension-character-count';
 import ThemeToggle from '@/components/ThemeToggle';
 import TextSizeControl from '@/components/TextSizeControl';
-import { useNav } from '@/components/AppShell/NavContext';
-import { PanelLeftIcon, SearchIcon, MessageSquareIcon, ArrowDownIcon, XIcon } from '@/components/icons';
+import TopNav, { type ProjectTab } from '@/components/TopNav/TopNav';
+import ProjectSearch from '@/components/ProjectSearch';
+import { SearchIcon, MessageSquareIcon, XIcon } from '@/components/icons';
 import {
   SuggestionHighlight,
   setSuggestionDecorations,
@@ -20,13 +22,14 @@ import {
 import { saveEntry, saveSuggestionState, recordSuggestionFeedback } from '@/app/subjects/[subjectId]/entries/[entryId]/actions';
 import { syncExtractedEntities } from '@/app/subjects/[subjectId]/outline/actions';
 import type { ExtractedEntity } from '@/lib/claude';
-import { docToMarkdown } from '@/lib/markdown';
-import type { AdviceMessage, Entry, SuggestionCategory, SuggestionDef, SuggestionState } from '@/lib/types';
+import type { AdviceMessage, Entry, SearchResult, SuggestionCategory, SuggestionDef, SuggestionState } from '@/lib/types';
 
 interface Props {
   subjectId: string;
+  subjectTitle: string;
   entry: Entry;
-  sectionLabel: string;
+  /** e.g. "Chapter 3" — shown before the title in the top bar's crumb. */
+  crumbPrefix: string;
 }
 
 interface RawSuggestionWithId {
@@ -53,8 +56,8 @@ function wordCount(text: string): number {
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
-export default function EntryEditor({ subjectId, entry, sectionLabel }: Props) {
-  const { navOpen, toggleNav } = useNav();
+export default function EntryEditor({ subjectId, subjectTitle, entry, crumbPrefix }: Props) {
+  const router = useRouter();
   const [title, setTitle] = useState(entry.title);
   const titleRef = useRef(entry.title);
   useEffect(() => {
@@ -82,6 +85,23 @@ export default function EntryEditor({ subjectId, entry, sectionLabel }: Props) {
   const [adviceInput, setAdviceInput] = useState('');
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [adviceError, setAdviceError] = useState<string | null>(null);
+
+  // Full-screen project search (shared ProjectSearch overlay).
+  const [searchOpen, setSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+
+  function goToProjectTab(tab: ProjectTab) {
+    router.push(`/subjects/${subjectId}?tab=${tab}`);
+  }
+
+  function goToSearchResult(result: SearchResult) {
+    closeSearch();
+    if (result.kind === 'chapter' || result.kind === 'thread') {
+      router.push(`/subjects/${subjectId}/entries/${result.id}`);
+    } else {
+      router.push(`/subjects/${subjectId}?tab=${result.kind === 'character' ? 'characters' : 'places'}`);
+    }
+  }
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -421,66 +441,37 @@ export default function EntryEditor({ subjectId, entry, sectionLabel }: Props) {
     }
   };
 
-  const exportMarkdown = () => {
-    if (!editor) return;
-    const heading = titleRef.current.trim() || 'Untitled';
-    const markdown = `# ${heading}\n\n${docToMarkdown(editor.getJSON())}`;
-    const filename =
-      heading
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '') || 'untitled';
-
-    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${filename}.md`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-
   const readingTime = Math.max(1, Math.round(liveWordCount / 200));
 
   return (
     <>
-      <main className="editor-area">
-        <header className="topbar">
-          <div className="topbar-left">
-            <button
-              className={`icon-btn${navOpen ? '' : ' active'}`}
-              title={navOpen ? 'Close chapter list' : 'Open chapter list'}
-              onClick={toggleNav}
-            >
-              <PanelLeftIcon />
-            </button>
-            <div className="breadcrumb">
-              {sectionLabel} / {title || 'Untitled'}
-            </div>
-          </div>
-          <div className="topbar-right">
+      <TopNav
+        subjectTitle={subjectTitle}
+        mode="hover"
+        crumb={`${crumbPrefix} – ${title || 'Untitled'}`}
+        onSelectTab={goToProjectTab}
+        right={
+          <>
             <span className="meta">
               {liveWordCount} words · {readingTime} min read
             </span>
-            <button className="icon-btn" title="Search this project" onClick={() => setToast('Project search is coming soon')}>
+            <TextSizeControl />
+            <button className="icon-btn" title="Search this project" onClick={() => setSearchOpen(true)}>
               <SearchIcon />
             </button>
-            <TextSizeControl />
             <ThemeToggle />
-            <button className="icon-btn" title="Export as Markdown" onClick={exportMarkdown}>
-              <ArrowDownIcon />
-            </button>
             <button
-              className={`icon-btn${railOpen ? '' : ' active'}`}
+              className={`icon-btn notes-toggle${railOpen ? ' active' : ''}`}
               title={railOpen ? 'Hide notes' : 'Show notes'}
+              aria-pressed={railOpen}
               onClick={() => setRailOpen((v) => !v)}
             >
               <MessageSquareIcon />
             </button>
-          </div>
-        </header>
+          </>
+        }
+      />
+      <main className={`editor-area${railOpen ? ' notes-open' : ''}`}>
         <div className="editor-scroll" ref={editorContainerRef}>
           <div className="editor-column">
             <input
@@ -512,7 +503,6 @@ export default function EntryEditor({ subjectId, entry, sectionLabel }: Props) {
 
       {railOpen && (
         <aside className="rail">
-          <div className="rail-header">NOTES</div>
           <div className="rail-inner" ref={railRef}>
             {orderedSuggestions.length === 0 ? (
               <p className="rail-empty">Click Review to get feedback on this piece.</p>
@@ -623,6 +613,10 @@ export default function EntryEditor({ subjectId, entry, sectionLabel }: Props) {
             </form>
           </div>
         </div>
+      )}
+
+      {searchOpen && (
+        <ProjectSearch subjectId={subjectId} onClose={closeSearch} onSelect={goToSearchResult} />
       )}
     </>
   );

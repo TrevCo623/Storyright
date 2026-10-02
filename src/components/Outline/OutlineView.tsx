@@ -2,17 +2,16 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import ThemeToggle from '@/components/ThemeToggle';
-import TextSizeControl from '@/components/TextSizeControl';
+import TopNav, { PROJECT_TABS, isProjectTab, type ProjectTab } from '@/components/TopNav/TopNav';
+import ProjectSearch from '@/components/ProjectSearch';
 import DashedOutline from '@/components/DashedOutline';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import TrashIcon from '@/components/icons/TrashIcon';
-import { ArrowLeftIcon, XIcon, GripVerticalIcon, PlusIcon } from '@/components/icons';
-import type { Character, Entry, OutlineReview, OutlineSuggestionCategory, Place } from '@/lib/types';
+import { SearchIcon, GripVerticalIcon, PlusIcon } from '@/components/icons';
+import type { Character, Entry, OutlineReview, OutlineSuggestionCategory, Place, SearchResult } from '@/lib/types';
 import { createEntry, deleteEntry, renameEntry } from '@/app/subjects/[subjectId]/actions';
 import {
-  updateSubjectTitle,
   saveStorySummary,
   saveChapterMeta,
   createChapter,
@@ -25,15 +24,7 @@ import {
   deletePlace,
 } from '@/app/subjects/[subjectId]/outline/actions';
 
-type OutlineTab = 'chapters' | 'characters' | 'places' | 'threads' | 'overview';
-
-const TABS: { id: OutlineTab; label: string }[] = [
-  { id: 'chapters', label: 'Chapters' },
-  { id: 'characters', label: 'Characters' },
-  { id: 'places', label: 'Places' },
-  { id: 'threads', label: 'Threads' },
-  { id: 'overview', label: 'Summary' },
-];
+type OutlineTab = ProjectTab;
 
 const CATEGORY_COLOR_VAR: Record<OutlineSuggestionCategory, string> = {
   chapter: 'var(--accent)',
@@ -109,17 +100,15 @@ export default function OutlineView({
 
   const [review, setReview] = useState(outlineReview);
   const [reviewing, setReviewing] = useState(false);
-  const [reviewOpen, setReviewOpen] = useState(false);
   const [, startTransition] = useTransition();
 
   const initialTabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<OutlineTab>(
-    TABS.some((t) => t.id === initialTabParam) ? (initialTabParam as OutlineTab) : 'chapters'
+    isProjectTab(initialTabParam) ? initialTabParam : 'chapters'
   );
-  const [title, setTitle] = useState(initialTitle);
-  const [editingTitle, setEditingTitle] = useState(false);
+  const title = initialTitle;
   const [chaptersDirty, setChaptersDirty] = useState(false);
-  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   // Summary tab — premise/themes/takeaway each get their own hover-reveal
@@ -175,33 +164,6 @@ export default function OutlineView({
     startTransition(() => {
       void saveStorySummary(subjectId, next);
     });
-  }
-
-  function startEditTitle() {
-    setEditingTitle(true);
-    requestAnimationFrame(() => {
-      const node = titleRef.current;
-      if (!node) return;
-      node.focus();
-      const range = document.createRange();
-      range.selectNodeContents(node);
-      range.collapse(false);
-      const sel = window.getSelection();
-      sel?.removeAllRanges();
-      sel?.addRange(range);
-    });
-  }
-
-  function saveTitle() {
-    const next = titleRef.current?.textContent?.trim() || 'Untitled';
-    setTitle(next);
-    setEditingTitle(false);
-    void updateSubjectTitle(subjectId, next);
-  }
-
-  function cancelEditTitle() {
-    if (titleRef.current) titleRef.current.textContent = title;
-    setEditingTitle(false);
   }
 
   function summaryFieldValue(field: SummaryField) {
@@ -358,6 +320,24 @@ export default function OutlineView({
     return () => clearTimeout(t);
   }, [justDroppedChapterId]);
 
+  // Tabs live in the shared top bar; keep the URL in sync so reloads, the
+  // editor's tab links (?tab=…) and the back button all land on the same tab.
+  function selectTab(tab: OutlineTab) {
+    setActiveTab(tab);
+    router.replace(`/subjects/${subjectId}?tab=${tab}`, { scroll: false });
+    const scrollEl = document.querySelector('.outline-area .editor-scroll');
+    if (scrollEl) scrollEl.scrollTop = 0;
+  }
+
+  function goToSearchResult(result: SearchResult) {
+    setSearchOpen(false);
+    if (result.kind === 'chapter' || result.kind === 'thread') {
+      router.push(`/subjects/${subjectId}/entries/${result.id}`);
+    } else {
+      selectTab(result.kind === 'character' ? 'characters' : 'places');
+    }
+  }
+
   async function runOutlineReview() {
     setReviewing(true);
     try {
@@ -369,7 +349,7 @@ export default function OutlineView({
       const data = (await res.json()) as { review?: OutlineReview; error?: string };
       if (data.review) {
         setReview(data.review);
-        setReviewOpen(true);
+        selectTab('insights');
         setChaptersDirty(false);
       }
     } finally {
@@ -380,69 +360,64 @@ export default function OutlineView({
   return (
     <div className="app">
       <main className="editor-area outline-area">
-      <header className="topbar">
-        <Link href="/subjects" className="nav-back-link">
-          <ArrowLeftIcon /> See all projects
-        </Link>
-        <div className="topbar-right">
-          <TextSizeControl />
-          <ThemeToggle />
-        </div>
-      </header>
+      <TopNav
+        subjectTitle={title}
+        mode="static"
+        activeTab={activeTab}
+        onSelectTab={selectTab}
+        matchEditorBreakpoint
+        right={
+          <>
+            <button className="icon-btn" title="Search this project" onClick={() => setSearchOpen(true)}>
+              <SearchIcon />
+            </button>
+            <ThemeToggle />
+          </>
+        }
+      />
 
       <div className="editor-scroll">
         <div className="outline-column">
           <div className={`outline-sticky-head${scrolled ? ' is-scrolled' : ''}`}>
-            <div className="outline-header-row">
-              <div className={`outline-title-wrap${editingTitle ? ' editing' : ''}`}>
-                <h1
-                  ref={titleRef}
-                  className="outline-title"
-                  contentEditable={editingTitle}
-                  suppressContentEditableWarning
-                  spellCheck={false}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      saveTitle();
-                    } else if (e.key === 'Escape') {
-                      cancelEditTitle();
-                    }
-                  }}
-                >
-                  {title || 'Untitled'}
-                </h1>
-                <button className="title-edit-btn" onClick={startEditTitle}>
-                  Edit
-                </button>
-                <button className="title-save-btn" onClick={saveTitle}>
-                  Save title
-                </button>
-              </div>
-              <button
-                className={`review-btn review-btn-top${chaptersDirty ? ' has-dirty' : ''}${reviewing ? ' loading' : ''}`}
-                onClick={runOutlineReview}
-                disabled={reviewing}
-              >
-                <span className="icon">✦</span>
-                <span>{reviewing ? 'Reviewing…' : 'Review'}</span>
-                <span className="review-dirty-dot" title="Chapter order changed — review to check continuity">
-                  !
-                </span>
-              </button>
-            </div>
+            <h1 className="outline-page-title">
+              {PROJECT_TABS.find((t) => t.id === activeTab)?.label}
+            </h1>
+          </div>
 
-            <div className="outline-tabs">
-              {TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  className={`outline-tab${activeTab === tab.id ? ' active' : ''}`}
-                  onClick={() => setActiveTab(tab.id)}
-                >
-                  {tab.label}
+          {/* ---------- Insights (outline review results) ---------- */}
+          <div className={`tab-panel${activeTab === 'insights' ? ' active' : ''}`}>
+            <section className="outline-section" style={{ marginTop: 16 }}>
+              {!review ? (
+                <button className="empty-tile" onClick={runOutlineReview} disabled={reviewing}>
+                  <DashedOutline />
+                  <div className="empty-tile-title">See your outline through fresh eyes.</div>
+                  <div className="empty-tile-desc">Run a review to get feedback on your outline.</div>
+                  <div className="empty-tile-circle">✦</div>
                 </button>
-              ))}
-            </div>
+              ) : (
+                <>
+                  <p className="insights-summary">{review.summary}</p>
+                  <div className="insights-table">
+                    <div className="insights-header-row">
+                      <span className="insights-header-cell category">Category</span>
+                      <span className="insights-header-cell">Suggestion</span>
+                    </div>
+                    {review.suggestions.map((s) => (
+                      <div key={s.id} className="insights-row">
+                        <div className="insights-category-cell">
+                          <span className="insights-dot" style={{ background: CATEGORY_COLOR_VAR[s.category] }} />
+                          <span className="insights-cat-label">{CATEGORY_LABEL[s.category]}</span>
+                        </div>
+                        <div className="insights-content-cell">
+                          <span className="insights-heading">{s.heading}</span>
+                          <p className="insights-desc">{s.desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
           </div>
 
           {/* ---------- Summary ---------- */}
@@ -858,32 +833,21 @@ export default function OutlineView({
         </div>
       </div>
 
-      {reviewOpen && review && (
-        <div className="advice-overlay" onClick={() => setReviewOpen(false)}>
-          <div className="advice-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="advice-header">
-              <span>Outline review</span>
-              <button className="icon-btn" onClick={() => setReviewOpen(false)}>
-                <XIcon />
-              </button>
-            </div>
-            <div className="advice-thread">
-              <p className="review-summary">{review.summary}</p>
-              {review.suggestions.map((s) => (
-                <div key={s.id} className="suggestion-item">
-                  <div className="head">
-                    <span className="dot" style={{ background: CATEGORY_COLOR_VAR[s.category] }} />
-                    <span className="heading">{s.heading}</span>
-                    <span className="new-badge" style={{ color: CATEGORY_COLOR_VAR[s.category] }}>
-                      {CATEGORY_LABEL[s.category]}
-                    </span>
-                  </div>
-                  <p className="desc">{s.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      <span className="outline-saved">Saved</span>
+      <button
+        className={`review-btn review-btn-top outline-review-float${chaptersDirty ? ' has-dirty' : ''}${reviewing ? ' loading' : ''}`}
+        onClick={runOutlineReview}
+        disabled={reviewing}
+      >
+        <span className="icon">✦</span>
+        <span>{reviewing ? 'Reviewing…' : 'Review'}</span>
+        <span className="review-dirty-dot" title="Chapter order changed — review to check continuity">
+          !
+        </span>
+      </button>
+
+      {searchOpen && (
+        <ProjectSearch subjectId={subjectId} onClose={() => setSearchOpen(false)} onSelect={goToSearchResult} />
       )}
 
       {confirmDialog && (

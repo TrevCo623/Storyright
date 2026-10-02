@@ -146,3 +146,21 @@ export function ArrowDownIcon({ size = 14, className }: IconProps) {
     </svg>
   );
 }
+
+export function ChevronLeftIcon({ size = 12, className }: IconProps) {
+  return (
+    <svg width={size} height={size} className={className} {...base}>
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
+export function MenuIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg width={size} height={size} className={className} {...base}>
+      <path d="M4 6h16" />
+      <path d="M4 12h16" />
+      <path d="M4 18h16" />
+    </svg>
+  );
+}
