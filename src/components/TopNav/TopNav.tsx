@@ -34,13 +34,13 @@ export function isProjectTab(value: string | null | undefined): value is Project
   return PROJECT_TABS.some((t) => t.id === value);
 }
 
-// Width of the editor's top-right cluster (word count, text size, search,
-// theme, notes) at the 1160px design width. The Outline's cluster is
+// Width of the editor's top-right cluster (text size, search, theme, notes). The Outline's cluster is
 // narrower, so it reserves this much instead — that way both pages switch
 // to the compact menu at the same window width.
-const EDITOR_RIGHT_CLUSTER_W = 311;
+const EDITOR_RIGHT_CLUSTER_W = 160;
 const COLLISION_GAP = 24;
-const MENU_BTN_W = 30; // 26px icon button + 4px gap
+const FOOTER_X = 48; // matches --footer-x (side inset of the top bar + footer)
+const MENU_BTN_W = 40; // 36px menu button + 4px gap
 
 interface Props {
   subjectTitle: string;
@@ -90,7 +90,7 @@ export default function TopNav({
     if (!probe || !back || !rightBox) return;
     const vw = window.innerWidth;
     const rightEdge = matchEditorBreakpoint
-      ? Math.min(rightBox.left, vw - EDITOR_RIGHT_CLUSTER_W - 16)
+      ? Math.min(rightBox.left, vw - EDITOR_RIGHT_CLUSTER_W - FOOTER_X)
       : rightBox.left;
     const compact = probe.left < back.right + COLLISION_GAP || probe.right > rightEdge - COLLISION_GAP;
     const crumbLeft = back.right + MENU_BTN_W + COLLISION_GAP;

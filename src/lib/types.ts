@@ -94,27 +94,70 @@ export interface Subject {
   updated_at: string;
 }
 
+// Per-character / per-place Review results (Insights tab on the detail page).
+export type EntityInsightCategory = 'arc' | 'consistency' | 'presence' | 'theme' | 'relationship' | 'history';
+export interface EntityInsight {
+  category: EntityInsightCategory;
+  heading: string;
+  desc: string;
+}
+export interface EntityReview {
+  summary: string;
+  items: EntityInsight[];
+  generated_at: string;
+}
+
 export interface Character {
   id: string;
   subject_id: string;
   name: string;
   role: string;
-  summary: string;
+  summary: string; // "Background" on the detail page
   position: number;
   source: EntitySource;
   created_at: string;
   updated_at: string;
+  // 0003_story_bible.sql
+  is_main: boolean;
+  aliases: string[];
+  themes: string;
+  arc_start: string;
+  arc_turn: string;
+  arc_end: string;
+  review: EntityReview | null;
+  promote_dismissed: boolean;
 }
 
 export interface Place {
   id: string;
   subject_id: string;
   name: string;
-  summary: string;
+  summary: string; // "Description" on the detail page
   position: number;
   source: EntitySource;
   created_at: string;
   updated_at: string;
+  // 0003_story_bible.sql
+  is_key: boolean;
+  aliases: string[];
+  history: string;
+  significance: string;
+  review: EntityReview | null;
+  promote_dismissed: boolean;
+}
+
+// AI-found indirect reference to a character/place in one chapter
+// (e.g. "her father"), stored on chapter Review. See lib/appearances.ts.
+export interface EntityMention {
+  id: string;
+  subject_id: string;
+  entry_id: string;
+  entity_kind: 'character' | 'place';
+  entity_id: string;
+  via: string;
+  mention_count: number;
+  snippet: string;
+  created_at: string;
 }
 
 export interface Section {
@@ -142,6 +185,8 @@ export interface Entry {
   target_feeling: string;
   created_at: string;
   updated_at: string;
+  // Threads only: characters/places this thread was added from (0003_story_bible.sql).
+  linked_entity_ids?: string[];
 }
 
 export interface AdviceMessage {
@@ -172,6 +217,7 @@ export type Database = {
       entries: { Row: Entry; Insert: Partial<Entry>; Update: Partial<Entry> };
       characters: { Row: Character; Insert: Partial<Character>; Update: Partial<Character> };
       places: { Row: Place; Insert: Partial<Place>; Update: Partial<Place> };
+      entity_mentions: { Row: EntityMention; Insert: Partial<EntityMention>; Update: Partial<EntityMention> };
       suggestion_feedback: {
         Row: { id: string; user_id: string; entry_id: string; suggestion_id: string; category: string; outcome: SuggestionOutcome; created_at: string };
         Insert: Record<string, unknown>;

@@ -25,7 +25,7 @@ export default async function SubjectOverviewPage({
   const chaptersSectionId = sections?.find((s) => s.type === 'chapters')?.id ?? null;
   const threadsSectionId = sections?.find((s) => s.type === 'threads')?.id ?? null;
 
-  const [{ data: chapters }, { data: threads }, { data: characters }, { data: places }] =
+  const [{ data: chapters }, { data: threads }, { data: characters }, { data: places }, { data: mentions }] =
     await Promise.all([
       chaptersSectionId
         ? supabase.from('entries').select('*').eq('section_id', chaptersSectionId).order('position')
@@ -35,6 +35,7 @@ export default async function SubjectOverviewPage({
         : Promise.resolve({ data: [] as never[] }),
       supabase.from('characters').select('*').eq('subject_id', subjectId).order('position'),
       supabase.from('places').select('*').eq('subject_id', subjectId).order('position'),
+      supabase.from('entity_mentions').select('*').eq('subject_id', subjectId),
     ]);
 
   return (
@@ -51,6 +52,7 @@ export default async function SubjectOverviewPage({
       threads={threads ?? []}
       characters={characters ?? []}
       places={places ?? []}
+      mentions={mentions ?? []}
     />
   );
 }

@@ -10,6 +10,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import TextSizeControl from '@/components/TextSizeControl';
 import TopNav, { type ProjectTab } from '@/components/TopNav/TopNav';
 import ProjectSearch from '@/components/ProjectSearch';
+import { markWritingIn, clearWritingInIf } from '@/components/ResumeWriting';
 import { SearchIcon, MessageSquareIcon, XIcon } from '@/components/icons';
 import {
   SuggestionHighlight,
@@ -86,6 +87,11 @@ export default function EntryEditor({ subjectId, subjectTitle, entry, crumbPrefi
   const [adviceLoading, setAdviceLoading] = useState(false);
   const [adviceError, setAdviceError] = useState<string | null>(null);
 
+  // Back in this chapter → drop any "Continue writing in …" link pointing at it.
+  useEffect(() => {
+    clearWritingInIf(subjectId, entry.id);
+  }, [subjectId, entry.id]);
+
   // Full-screen project search (shared ProjectSearch overlay).
   const [searchOpen, setSearchOpen] = useState(false);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
@@ -99,7 +105,7 @@ export default function EntryEditor({ subjectId, subjectTitle, entry, crumbPrefi
     if (result.kind === 'chapter' || result.kind === 'thread') {
       router.push(`/subjects/${subjectId}/entries/${result.id}`);
     } else {
-      router.push(`/subjects/${subjectId}?tab=${result.kind === 'character' ? 'characters' : 'places'}`);
+      router.push(`/subjects/${subjectId}/${result.kind === 'character' ? 'characters' : 'places'}/${result.id}`);
     }
   }
 
@@ -138,6 +144,8 @@ export default function EntryEditor({ subjectId, subjectTitle, entry, crumbPrefi
     onUpdate: ({ editor }) => {
       setLiveWordCount(editor.storage.characterCount?.words() ?? 0);
       scheduleSave();
+      // Lets the Outline / detail pages offer "Continue writing in …".
+      markWritingIn(subjectId, entry.id, titleRef.current || crumbPrefix);
     },
   });
 
@@ -452,9 +460,6 @@ export default function EntryEditor({ subjectId, subjectTitle, entry, crumbPrefi
         onSelectTab={goToProjectTab}
         right={
           <>
-            <span className="meta">
-              {liveWordCount} words · {readingTime} min read
-            </span>
             <TextSizeControl />
             <button className="icon-btn" title="Search this project" onClick={() => setSearchOpen(true)}>
               <SearchIcon />
@@ -498,7 +503,13 @@ export default function EntryEditor({ subjectId, subjectTitle, entry, crumbPrefi
           {reviewing ? 'Reviewing…' : 'Review'}
         </button>
         {toast && <div className="review-toast">{toast}</div>}
-        <div className="statusbar">{saveStatus === 'saving' ? 'Saving…' : 'Saved'}</div>
+        <div className="statusbar">
+          <span>
+            {liveWordCount} words · {readingTime} min read
+          </span>
+          <span className="status-sep">·</span>
+          <span>{saveStatus === 'saving' ? 'Saving…' : 'Saved'}</span>
+        </div>
       </main>
 
       {railOpen && (

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { generateSuggestions, extractEntities, type ExtractedEntity } from '@/lib/claude';
+import { generateSuggestions, extractEntities, extractReferences, type ExtractedEntity } from '@/lib/claude';
 import { nanoid } from 'nanoid';
 import type { SuggestionCategory } from '@/lib/types';
 
@@ -62,12 +62,50 @@ export async function POST(request: Request) {
           supabase.from('places').select('name').eq('subject_id', subjectId),
         ]);
 
+        // Appearances: record indirect references ("her father") for this
+        // chapter, in parallel with entity extraction. Best-effort — never
+        // blocks the Review itself.
+        const refsTask = (async () => {
+        try {
+          const [{ data: charRows }, { data: placeRows }] = await Promise.all([
+            supabase.from('characters').select('id, name, aliases').eq('subject_id', subjectId),
+            supabase.from('places').select('id, name, aliases').eq('subject_id', subjectId),
+          ]);
+          const roster = [
+            ...(charRows ?? []).map((c) => ({ id: c.id, kind: 'character' as const, name: c.name, aliases: c.aliases ?? [] })),
+            ...(placeRows ?? []).map((p) => ({ id: p.id, kind: 'place' as const, name: p.name, aliases: p.aliases ?? [] })),
+          ].filter((e) => e.name);
+          const refs = await extractReferences({
+            chapterText: (body.paragraphs ?? []).join('\n\n'),
+            entities: roster,
+          });
+          await supabase.from('entity_mentions').delete().eq('entry_id', body.entryId);
+          if (refs.length) {
+            const kindOf = new Map(roster.map((e) => [e.id, e.kind]));
+            await supabase.from('entity_mentions').insert(
+              refs.map((r) => ({
+                subject_id: subjectId,
+                entry_id: body.entryId,
+                entity_kind: kindOf.get(r.entityId),
+                entity_id: r.entityId,
+                via: r.via,
+                mention_count: r.count,
+                snippet: r.snippet,
+              }))
+            );
+          }
+        } catch (err) {
+          console.error('Reference extraction failed', err);
+        }
+        })();
+
         entities = await extractEntities({
           chapterTitle: body.title,
           chapterText: (body.paragraphs ?? []).join('\n\n'),
           knownCharacters: (knownChars ?? []).map((c) => c.name),
           knownPlaces: (knownPlaces ?? []).map((p) => p.name),
         });
+        await refsTask;
       }
     }
 

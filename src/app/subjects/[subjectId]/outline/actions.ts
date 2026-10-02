@@ -4,6 +4,14 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { ExtractedEntity } from '@/lib/claude';
 import { emptySuggestionState } from '@/lib/types';
+import type { Character, Place } from '@/lib/types';
+
+type CharacterPatch = Partial<
+  Pick<Character, 'name' | 'role' | 'summary' | 'is_main' | 'aliases' | 'themes' | 'arc_start' | 'arc_turn' | 'arc_end' | 'promote_dismissed'>
+>;
+type PlacePatch = Partial<
+  Pick<Place, 'name' | 'summary' | 'is_key' | 'aliases' | 'history' | 'significance' | 'promote_dismissed'>
+>;
 
 // ---------- Title ----------
 
@@ -124,11 +132,7 @@ export async function createCharacter(
   return created;
 }
 
-export async function updateCharacter(
-  subjectId: string,
-  characterId: string,
-  data: { name?: string; role?: string; summary?: string }
-) {
+export async function updateCharacter(subjectId: string, characterId: string, data: CharacterPatch) {
   const supabase = createClient();
   await supabase.from('characters').update(data).eq('id', characterId);
   revalidatePath(`/subjects/${subjectId}`);
@@ -137,6 +141,7 @@ export async function updateCharacter(
 export async function deleteCharacter(subjectId: string, characterId: string) {
   const supabase = createClient();
   await supabase.from('characters').delete().eq('id', characterId);
+  await supabase.from('entity_mentions').delete().eq('entity_id', characterId);
   revalidatePath(`/subjects/${subjectId}`);
 }
 
@@ -165,11 +170,7 @@ export async function createPlace(subjectId: string, data: { name: string; summa
   return created;
 }
 
-export async function updatePlace(
-  subjectId: string,
-  placeId: string,
-  data: { name?: string; summary?: string }
-) {
+export async function updatePlace(subjectId: string, placeId: string, data: PlacePatch) {
   const supabase = createClient();
   await supabase.from('places').update(data).eq('id', placeId);
   revalidatePath(`/subjects/${subjectId}`);
@@ -178,7 +179,64 @@ export async function updatePlace(
 export async function deletePlace(subjectId: string, placeId: string) {
   const supabase = createClient();
   await supabase.from('places').delete().eq('id', placeId);
+  await supabase.from('entity_mentions').delete().eq('entity_id', placeId);
   revalidatePath(`/subjects/${subjectId}`);
+}
+
+// ---------- Detail pages ----------
+
+// "Add a new character/place" creates an unnamed row and opens its detail
+// page with the name in edit mode (replaces the old pop-up). If the writer
+// leaves without naming it, the detail page deletes it again.
+export async function createBlankEntity(subjectId: string, kind: 'character' | 'place') {
+  const supabase = createClient();
+  const table = kind === 'character' ? 'characters' : 'places';
+  const { count } = await supabase
+    .from(table)
+    .select('*', { count: 'exact', head: true })
+    .eq('subject_id', subjectId);
+  const { data: created, error } = await supabase
+    .from(table)
+    .insert({ subject_id: subjectId, name: '', summary: '', position: count ?? 0, source: 'manual' })
+    .select('id')
+    .single();
+  if (error || !created) throw new Error(error?.message || `Failed to create ${kind}`);
+  revalidatePath(`/subjects/${subjectId}`);
+  return created.id as string;
+}
+
+// "Add a thread about Mara" — a thread entry linked to the character/place it
+// was added from, so it shows on that page and on the main Threads list.
+export async function createLinkedThread(
+  subjectId: string,
+  threadsSectionId: string,
+  entityId: string,
+  data: { title: string; summary: string }
+) {
+  const supabase = createClient();
+  const { count } = await supabase
+    .from('entries')
+    .select('*', { count: 'exact', head: true })
+    .eq('section_id', threadsSectionId);
+  const { data: created, error } = await supabase
+    .from('entries')
+    .insert({
+      section_id: threadsSectionId,
+      parent_entry_id: null,
+      title: data.title.trim() || 'Untitled thread',
+      synopsis: data.summary.trim(),
+      content: { type: 'doc', content: [{ type: 'paragraph' }] },
+      content_text: '',
+      word_count: 0,
+      position: count ?? 0,
+      suggestion_state: emptySuggestionState(),
+      linked_entity_ids: [entityId],
+    })
+    .select()
+    .single();
+  if (error || !created) throw new Error(error?.message || 'Failed to create thread');
+  revalidatePath(`/subjects/${subjectId}`);
+  return created;
 }
 
 // ---------- Auto-extraction sync ----------

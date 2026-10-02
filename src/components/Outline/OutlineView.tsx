@@ -5,24 +5,26 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import ThemeToggle from '@/components/ThemeToggle';
 import TopNav, { PROJECT_TABS, isProjectTab, type ProjectTab } from '@/components/TopNav/TopNav';
 import ProjectSearch from '@/components/ProjectSearch';
+import ResumeWriting from '@/components/ResumeWriting';
+import RecentEdits, { type RecentItem } from '@/components/Outline/RecentEdits';
 import DashedOutline from '@/components/DashedOutline';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import TrashIcon from '@/components/icons/TrashIcon';
 import { SearchIcon, GripVerticalIcon, PlusIcon } from '@/components/icons';
-import type { Character, Entry, OutlineReview, OutlineSuggestionCategory, Place, SearchResult } from '@/lib/types';
+import type { Character, Entry, EntityMention, OutlineReview, OutlineSuggestionCategory, Place, SearchResult } from '@/lib/types';
 import { createEntry, deleteEntry, renameEntry } from '@/app/subjects/[subjectId]/actions';
 import {
   saveStorySummary,
   saveChapterMeta,
   createChapter,
   reorderChapters,
-  createCharacter,
   updateCharacter,
   deleteCharacter,
-  createPlace,
   updatePlace,
   deletePlace,
+  createBlankEntity,
 } from '@/app/subjects/[subjectId]/outline/actions';
+import { findAppearances, shouldSuggestPromote } from '@/lib/appearances';
 
 type OutlineTab = ProjectTab;
 
@@ -53,6 +55,8 @@ interface Props {
   threads: Entry[];
   characters: Character[];
   places: Place[];
+  /** AI-found indirect references (entity_mentions), for appearance counts. */
+  mentions: EntityMention[];
 }
 
 export default function OutlineView({
@@ -68,6 +72,7 @@ export default function OutlineView({
   threads,
   characters: initialCharacters,
   places: initialPlaces,
+  mentions,
 }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,10 +85,6 @@ export default function OutlineView({
   const [characters, setCharacters] = useState(initialCharacters);
   const [places, setPlaces] = useState(initialPlaces);
 
-  const [addingCharacter, setAddingCharacter] = useState(false);
-  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
-  const [addingPlace, setAddingPlace] = useState(false);
-  const [editingPlace, setEditingPlace] = useState<Place | null>(null);
   const [addingThread, setAddingThread] = useState(false);
   const [editingThread, setEditingThread] = useState<Entry | null>(null);
   const [chapterDialogOpen, setChapterDialogOpen] = useState(false);
@@ -104,7 +105,7 @@ export default function OutlineView({
 
   const initialTabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<OutlineTab>(
-    isProjectTab(initialTabParam) ? initialTabParam : 'chapters'
+    isProjectTab(initialTabParam) ? initialTabParam : 'overview' // Summary is the landing page
   );
   const title = initialTitle;
   const [chaptersDirty, setChaptersDirty] = useState(false);
@@ -153,8 +154,8 @@ export default function OutlineView({
   useEffect(() => {
     if (searchParams.get('new') !== '1') return;
     if (activeTab === 'chapters' && chaptersSectionId) setChapterDialogOpen(true);
-    else if (activeTab === 'characters') setAddingCharacter(true);
-    else if (activeTab === 'places') setAddingPlace(true);
+    else if (activeTab === 'characters') void openNewEntity('character');
+    else if (activeTab === 'places') void openNewEntity('place');
     else if (activeTab === 'threads' && threadsSectionId) setAddingThread(true);
     router.replace(`/subjects/${subjectId}?tab=${activeTab}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -188,6 +189,42 @@ export default function OutlineView({
       sel?.addRange(range);
     });
   }
+
+  // Summary → Recent edits: everything in the project, newest first.
+  const recentItems: RecentItem[] = [
+    ...chapters.map((c, i) => ({
+      key: `chapter-${c.id}`,
+      type: `Chapter ${i + 1}`,
+      title: c.title || 'Untitled chapter',
+      text: c.content_text || c.synopsis || '',
+      updatedAt: c.updated_at,
+      onOpen: () => router.push(`/subjects/${subjectId}/entries/${c.id}`),
+    })),
+    ...threads.map((t) => ({
+      key: `thread-${t.id}`,
+      type: 'Thread',
+      title: t.title || 'Untitled thread',
+      text: t.content_text || '',
+      updatedAt: t.updated_at,
+      onOpen: () => router.push(`/subjects/${subjectId}/entries/${t.id}`),
+    })),
+    ...characters.map((c) => ({
+      key: `character-${c.id}`,
+      type: 'Character',
+      title: c.name || 'Unnamed character',
+      text: c.summary || '',
+      updatedAt: c.updated_at,
+      onOpen: () => router.push(detailHref('character', c.id)),
+    })),
+    ...places.map((p) => ({
+      key: `place-${p.id}`,
+      type: 'Place',
+      title: p.name || 'Unnamed place',
+      text: p.summary || '',
+      updatedAt: p.updated_at,
+      onOpen: () => router.push(detailHref('place', p.id)),
+    })),
+  ];
 
   // Summary fields work like a hovered note / chapter tile: the hover highlight
   // covers the text plus a reserved button row, with Edit at the bottom-right
@@ -387,8 +424,107 @@ export default function OutlineView({
     if (result.kind === 'chapter' || result.kind === 'thread') {
       router.push(`/subjects/${subjectId}/entries/${result.id}`);
     } else {
-      selectTab(result.kind === 'character' ? 'characters' : 'places');
+      router.push(detailHref(result.kind, result.id));
     }
+  }
+
+  // ---- Characters / Places → detail pages ----
+  function detailHref(kind: 'character' | 'place', id: string) {
+    return `/subjects/${subjectId}/${kind === 'character' ? 'characters' : 'places'}/${id}`;
+  }
+  // "Add a new character/place" opens a fresh detail page with the name in edit
+  // mode (replaces the old pop-up).
+  async function openNewEntity(kind: 'character' | 'place') {
+    const id = await createBlankEntity(subjectId, kind);
+    router.push(`${detailHref(kind, id)}?new=1`);
+  }
+
+  // Main / Supporting (Key / Other) groups. Main keeps your order; the rest
+  // sorts by how many chapters they appear in, and anyone in at least half the
+  // chapters gets a "Mark as main?" nudge you can accept or wave off.
+  function renderEntityGroups(kind: 'character' | 'place') {
+    const isCharacter = kind === 'character';
+    const list: (Character | Place)[] = isCharacter ? characters : places;
+    const isFlagged = (x: Character | Place) => (isCharacter ? (x as Character).is_main : (x as Place).is_key);
+    const counted = list.map((x) => ({ x, n: findAppearances(x, isCharacter, chapters, mentions).length }));
+    const main = counted.filter((o) => isFlagged(o.x));
+    const rest = counted.filter((o) => !isFlagged(o.x)).sort((a, b) => b.n - a.n);
+    const labels = isCharacter ? ['Main characters', 'Supporting characters'] : ['Key locations', 'Other places'];
+
+    async function setFlag(x: Character | Place, patch: { is_main?: boolean; is_key?: boolean; promote_dismissed?: boolean }) {
+      if (isCharacter) {
+        setCharacters((prev) => prev.map((c) => (c.id === x.id ? { ...c, ...patch } : c)));
+        await updateCharacter(subjectId, x.id, patch);
+      } else {
+        setPlaces((prev) => prev.map((p) => (p.id === x.id ? { ...p, ...patch } : p)));
+        await updatePlace(subjectId, x.id, patch);
+      }
+    }
+
+    const card = ({ x, n }: { x: Character | Place; n: number }) => (
+      <EntityCard
+        key={x.id}
+        name={x.name || (isCharacter ? 'Unnamed character' : 'Unnamed place')}
+        role={isCharacter ? (x as Character).role : undefined}
+        summary={(x.summary || '').split(/\n+/)[0]}
+        clampSummary
+        source={x.source}
+        typeLabel={kind}
+        onEdit={() => router.push(detailHref(kind, x.id))}
+        onRequestDelete={() =>
+          setConfirmDialog({
+            title: `Delete this ${kind}?`,
+            message: `"${x.name || 'Untitled'}" will be removed from your outline. This can't be undone.`,
+            confirmLabel: 'Delete',
+            onConfirm: async () => {
+              if (isCharacter) {
+                await deleteCharacter(subjectId, x.id);
+                setCharacters((prev) => prev.filter((c) => c.id !== x.id));
+              } else {
+                await deletePlace(subjectId, x.id);
+                setPlaces((prev) => prev.filter((p) => p.id !== x.id));
+              }
+            },
+          })
+        }
+      >
+        {!isFlagged(x) && !x.promote_dismissed && shouldSuggestPromote(n, chapters.length) && (
+          <div className="entity-suggest" onClick={(e) => e.stopPropagation()}>
+            <span className="icon">✦</span>
+            <span>
+              Appears in {n} of {chapters.length} chapters
+            </span>
+            <button
+              type="button"
+              className="entity-suggest-btn"
+              onClick={() => void setFlag(x, isCharacter ? { is_main: true } : { is_key: true })}
+            >
+              Mark as {isCharacter ? 'main' : 'key'}
+            </button>
+            <button type="button" className="entity-suggest-skip" onClick={() => void setFlag(x, { promote_dismissed: true })}>
+              Not now
+            </button>
+          </div>
+        )}
+      </EntityCard>
+    );
+
+    return (
+      <>
+        <div className="section-label">{labels[0]}</div>
+        {main.length === 0 ? (
+          <p className="entity-group-empty">
+            {isCharacter
+              ? 'No main characters yet. Open someone and switch on “Main character.”'
+              : 'No key locations yet. Open a place and switch on “Key location.”'}
+          </p>
+        ) : (
+          main.map(card)
+        )}
+        <div className="section-label entity-group-gap">{labels[1]}</div>
+        {rest.map(card)}
+      </>
+    );
   }
 
   async function runOutlineReview() {
@@ -484,6 +620,7 @@ export default function OutlineView({
                 </div>
               </div>
             </section>
+            <RecentEdits items={recentItems} />
           </div>
 
           {/* ---------- Chapters ---------- */}
@@ -580,75 +717,17 @@ export default function OutlineView({
           {/* ---------- Characters ---------- */}
           <div className={`tab-panel${activeTab === 'characters' ? ' active' : ''}`}>
             <section className="outline-section" style={{ marginTop: 16 }}>
-              {addingCharacter && (
-                <EntityDialog
-                  title="New character"
-                  fields={['name', 'role', 'summary']}
-                  submitLabel="Add"
-                  onCancel={() => setAddingCharacter(false)}
-                  onSubmit={async (values) => {
-                    const created = await createCharacter(subjectId, {
-                      name: values.name,
-                      role: values.role,
-                      summary: values.summary,
-                    });
-                    setCharacters((prev) => [...prev, created]);
-                    setAddingCharacter(false);
-                  }}
-                />
-              )}
-              {editingCharacter && (
-                <EntityDialog
-                  title="Edit character"
-                  fields={['name', 'role', 'summary']}
-                  submitLabel="Save"
-                  initial={{
-                    name: editingCharacter.name,
-                    role: editingCharacter.role,
-                    summary: editingCharacter.summary,
-                  }}
-                  onCancel={() => setEditingCharacter(null)}
-                  onSubmit={async (values) => {
-                    await updateCharacter(subjectId, editingCharacter.id, values);
-                    setCharacters((prev) =>
-                      prev.map((c) => (c.id === editingCharacter.id ? { ...c, ...values } : c))
-                    );
-                    setEditingCharacter(null);
-                  }}
-                />
-              )}
               <div className="entity-grid">
                 {characters.length === 0 ? (
-                  <button className="empty-tile" onClick={() => setAddingCharacter(true)}>
+                  <button className="empty-tile" onClick={() => void openNewEntity('character')}>
                     <DashedOutline />
                     <div className="empty-tile-title">Tell us who brings your story to life.</div>
                     <div className="empty-tile-circle"><PlusIcon size={18} /></div>
                   </button>
                 ) : (
                   <>
-                    {characters.map((character) => (
-                      <EntityCard
-                        key={character.id}
-                        name={character.name}
-                        role={character.role}
-                        summary={character.summary}
-                        source={character.source}
-                        typeLabel="character"
-                        onEdit={() => setEditingCharacter(character)}
-                        onRequestDelete={() =>
-                          setConfirmDialog({
-                            title: 'Delete this character?',
-                            message: `"${character.name || 'Untitled'}" will be removed from your outline. This can't be undone.`,
-                            confirmLabel: 'Delete',
-                            onConfirm: async () => {
-                              await deleteCharacter(subjectId, character.id);
-                              setCharacters((prev) => prev.filter((c) => c.id !== character.id));
-                            },
-                          })
-                        }
-                      />
-                    ))}
-                    <button className="entity-add-tile" onClick={() => setAddingCharacter(true)}>
+                    {renderEntityGroups('character')}
+                    <button className="entity-add-tile" onClick={() => void openNewEntity('character')}>
                       <DashedOutline />
                       <span className="chapter-add-tile-circle"><PlusIcon /></span>
                       <span>Add a new character</span>
@@ -662,69 +741,17 @@ export default function OutlineView({
           {/* ---------- Places ---------- */}
           <div className={`tab-panel${activeTab === 'places' ? ' active' : ''}`}>
             <section className="outline-section" style={{ marginTop: 16 }}>
-              {addingPlace && (
-                <EntityDialog
-                  title="New place"
-                  fields={['name', 'summary']}
-                  submitLabel="Add"
-                  onCancel={() => setAddingPlace(false)}
-                  onSubmit={async (values) => {
-                    const created = await createPlace(subjectId, {
-                      name: values.name,
-                      summary: values.summary,
-                    });
-                    setPlaces((prev) => [...prev, created]);
-                    setAddingPlace(false);
-                  }}
-                />
-              )}
-              {editingPlace && (
-                <EntityDialog
-                  title="Edit place"
-                  fields={['name', 'summary']}
-                  submitLabel="Save"
-                  initial={{ name: editingPlace.name, summary: editingPlace.summary }}
-                  onCancel={() => setEditingPlace(null)}
-                  onSubmit={async (values) => {
-                    await updatePlace(subjectId, editingPlace.id, values);
-                    setPlaces((prev) =>
-                      prev.map((p) => (p.id === editingPlace.id ? { ...p, ...values } : p))
-                    );
-                    setEditingPlace(null);
-                  }}
-                />
-              )}
               <div className="entity-grid">
                 {places.length === 0 ? (
-                  <button className="empty-tile" onClick={() => setAddingPlace(true)}>
+                  <button className="empty-tile" onClick={() => void openNewEntity('place')}>
                     <DashedOutline />
                     <div className="empty-tile-title">Show us where your story unfolds.</div>
                     <div className="empty-tile-circle"><PlusIcon size={18} /></div>
                   </button>
                 ) : (
                   <>
-                    {places.map((place) => (
-                      <EntityCard
-                        key={place.id}
-                        name={place.name}
-                        summary={place.summary}
-                        source={place.source}
-                        typeLabel="place"
-                        onEdit={() => setEditingPlace(place)}
-                        onRequestDelete={() =>
-                          setConfirmDialog({
-                            title: 'Delete this place?',
-                            message: `"${place.name || 'Untitled'}" will be removed from your outline. This can't be undone.`,
-                            confirmLabel: 'Delete',
-                            onConfirm: async () => {
-                              await deletePlace(subjectId, place.id);
-                              setPlaces((prev) => prev.filter((p) => p.id !== place.id));
-                            },
-                          })
-                        }
-                      />
-                    ))}
-                    <button className="entity-add-tile" onClick={() => setAddingPlace(true)}>
+                    {renderEntityGroups('place')}
+                    <button className="entity-add-tile" onClick={() => void openNewEntity('place')}>
                       <DashedOutline />
                       <span className="chapter-add-tile-circle"><PlusIcon /></span>
                       <span>Add a new place</span>
@@ -817,6 +844,7 @@ export default function OutlineView({
       </div>
 
       <span className="outline-saved">Saved</span>
+      <ResumeWriting subjectId={subjectId} titleFor={(id) => chapters.find((c) => c.id === id)?.title} />
       <button
         className={`review-btn review-btn-top outline-review-float${chaptersDirty ? ' has-dirty' : ''}${reviewing ? ' loading' : ''}`}
         onClick={runOutlineReview}
@@ -1160,18 +1188,22 @@ function EntityCard({
   name,
   role,
   summary,
+  clampSummary,
   source,
   typeLabel,
   onEdit,
   onRequestDelete,
+  children,
 }: {
   name: string;
   role?: string;
   summary: string;
+  clampSummary?: boolean;
   source: 'manual' | 'auto';
   typeLabel: string;
   onEdit: () => void;
   onRequestDelete: () => void;
+  children?: React.ReactNode;
 }) {
   return (
     <div className="entity-card" onClick={onEdit}>
@@ -1194,7 +1226,8 @@ function EntityCard({
         )}
       </div>
       {role && <div className="entity-role">{role}</div>}
-      {summary && <p className="entity-summary">{summary}</p>}
+      {summary && <p className={`entity-summary${clampSummary ? ' clamped' : ''}`}>{summary}</p>}
+      {children}
     </div>
   );
 }

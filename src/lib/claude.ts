@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { OutlineSuggestionCategory, SuggestionCategory } from '@/lib/types';
+import type { EntityInsight, EntityInsightCategory, OutlineSuggestionCategory, SuggestionCategory } from '@/lib/types';
 
 let client: Anthropic | null = null;
 export function claude() {
@@ -382,4 +382,134 @@ ${personalization ? '\n' + personalization : ''}`;
     .map((block) => block.text)
     .join('\n')
     .trim();
+}
+
+
+// ---------- Indirect references (chapter Review) ----------
+
+export interface ExtractedReference {
+  entityId: string;
+  via: string; // the phrase used, e.g. "her father"
+  count: number;
+  snippet: string; // the sentence it appears in
+}
+
+interface ExtractReferencesArgs {
+  chapterText: string;
+  entities: { id: string; kind: 'character' | 'place'; name: string; aliases: string[] }[];
+}
+
+// Runs on a chapter's explicit Review click. Finds where the chapter refers to
+// a known character or place WITHOUT using their name or aliases ("her father",
+// "the old keeper", "the town") — exact name matches are counted separately,
+// live, so they're excluded here.
+export async function extractReferences(args: ExtractReferencesArgs): Promise<ExtractedReference[]> {
+  const { chapterText, entities } = args;
+  if (chapterText.trim().length < 40 || !entities.length) return [];
+
+  const roster = entities
+    .map((e) => `- id=${e.id} | ${e.kind} | ${e.name}${e.aliases.length ? ` (also: ${e.aliases.join(', ')})` : ''}`)
+    .join('\n');
+
+  const system = `You read one chapter of a work-in-progress and find where it refers to a known character or place WITHOUT using their name or any listed alias — e.g. "her father", "the keeper", "the town", "she" when it unambiguously means one specific known character.
+
+Known characters and places:
+${roster}
+
+Rules:
+- Return ONLY a JSON array, no prose, no markdown fences.
+- Each item: {"id": the known id, "via": the exact referring phrase as written (e.g. "her father"), "count": how many times this chapter refers to them that way, "snippet": the full sentence containing the first such reference, copied exactly}.
+- One item per known id at most. Skip ids the chapter only refers to by name/alias, or doesn't refer to at all.
+- Only include references you're confident about. If none, return [].`;
+
+  const response = await claude().messages.create({
+    model: MODEL,
+    max_tokens: 1200,
+    system,
+    messages: [{ role: 'user', content: chapterText.slice(0, 60000) }],
+  });
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+
+  const known = new Set(entities.map((e) => e.id));
+  return extractJsonArray(text)
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+    .map((item) => ({
+      entityId: typeof item.id === 'string' ? item.id : '',
+      via: typeof item.via === 'string' ? item.via.trim() : '',
+      count: typeof item.count === 'number' && item.count > 0 ? Math.round(item.count) : 1,
+      snippet: typeof item.snippet === 'string' ? item.snippet.trim() : '',
+    }))
+    .filter((r) => known.has(r.entityId) && r.via);
+}
+
+// ---------- Character / Place review (detail page Insights) ----------
+
+interface EntityReviewArgs {
+  kind: 'character' | 'place';
+  storyTitle: string;
+  premise: string;
+  themes: string;
+  name: string;
+  role?: string;
+  fields: { label: string; value: string }[];
+  appearances: { chapter: string; how: string; snippet: string }[];
+  chapterCount: number;
+  threads: string[];
+}
+
+const ENTITY_CATEGORIES: EntityInsightCategory[] = ['arc', 'consistency', 'presence', 'theme', 'relationship', 'history'];
+
+export async function generateEntityReview(args: EntityReviewArgs): Promise<{ summary: string; items: EntityInsight[] }> {
+  const { kind, storyTitle, premise, themes, name, role, fields, appearances, chapterCount, threads } = args;
+  const label = kind === 'character' ? 'character' : 'place';
+
+  const system = `You are Storyright's story-bible consultant. A writer wants a focused review of one ${label} in their work-in-progress, checked against what they've actually written. Empty fields are simply not written yet, not flaws.
+
+Return ONLY a JSON object (no prose, no markdown fences):
+{"summary": "...", "items": [{"category": ${ENTITY_CATEGORIES.map((c) => `"${c}"`).join('|')}, "heading": "...", "desc": "..."}]}
+
+- "summary": 1-3 sentences on how this ${label} is working so far, specific to them, addressed to the writer.
+- "items": at most 5 concrete, actionable observations. Use "arc" for change over the story${kind === 'place' ? ' (rarely for places)' : ''}, "consistency" for contradictions or facts to double-check, "presence" for how often / how vividly they're on the page, "theme" for how they carry the story's themes, "relationship" for how they connect to others${kind === 'place' ? ' (people tied to the place)' : ''}, "history" for backstory gaps. Each "desc" is one or two specific sentences. Noting what's working is fine when it's specific.`;
+
+  const user = `Story: ${storyTitle || 'Untitled'}
+What it's about: ${premise || '(not written yet)'}
+Story themes: ${themes || '(not written yet)'}
+
+${kind === 'character' ? 'Character' : 'Place'}: ${name}${role ? ` (${role})` : ''}
+${fields.map((f) => `${f.label}: ${f.value || '(not written yet)'}`).join('\n')}
+
+Appears in ${appearances.length} of ${chapterCount} chapters:
+${appearances.length ? appearances.map((a) => `- ${a.chapter} (${a.how}): "${a.snippet}"`).join('\n') : '(not in any chapter yet)'}
+
+Related threads:
+${threads.length ? threads.map((t) => `- ${t}`).join('\n') : '(none)'}`;
+
+  const response = await claude().messages.create({
+    model: MODEL,
+    max_tokens: 1400,
+    system,
+    messages: [{ role: 'user', content: user }],
+  });
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+
+  const parsed = extractJsonObject(text);
+  const summary = typeof parsed?.summary === 'string' ? parsed.summary : '';
+  const rawItems = Array.isArray(parsed?.items) ? (parsed.items as unknown[]) : [];
+  const items = rawItems
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+    .map((item) => ({
+      category: (ENTITY_CATEGORIES.includes(item.category as EntityInsightCategory)
+        ? item.category
+        : 'consistency') as EntityInsightCategory,
+      heading: typeof item.heading === 'string' ? item.heading : '',
+      desc: typeof item.desc === 'string' ? item.desc : '',
+    }))
+    .filter((i) => i.heading && i.desc);
+  return { summary, items };
 }
