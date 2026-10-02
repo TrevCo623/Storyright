@@ -34,15 +34,17 @@ export async function POST(request: Request) {
       : null;
 
   try {
-    const raw = await generateSuggestions({
+    // Start the suggestions call right away and run the outline sync (entity
+    // extraction + indirect references) alongside it, so the whole Review
+    // takes about as long as its slowest AI call instead of the sum of them.
+    const suggestionsTask = generateSuggestions({
       title: body.title,
       paragraphs: body.paragraphs ?? [],
       existing: body.existing ?? [],
       manifesto: profile?.writing_manifesto || null,
       fingerprintSummary,
     });
-
-    const suggestions = raw.map((s) => ({ id: nanoid(10), ...s }));
+    suggestionsTask.catch(() => {}); // awaited below; avoids an unhandled-rejection crash meanwhile
 
     // Outline sync: if this entry lives in the 'chapters' section, also pull
     // any character/place detail out of it — piggybacking on the same
@@ -99,15 +101,23 @@ export async function POST(request: Request) {
         }
         })();
 
-        entities = await extractEntities({
-          chapterTitle: body.title,
-          chapterText: (body.paragraphs ?? []).join('\n\n'),
-          knownCharacters: (knownChars ?? []).map((c) => c.name),
-          knownPlaces: (knownPlaces ?? []).map((p) => p.name),
-        });
+        try {
+          entities = await extractEntities({
+            chapterTitle: body.title,
+            chapterText: (body.paragraphs ?? []).join('\n\n'),
+            knownCharacters: (knownChars ?? []).map((c) => c.name),
+            knownPlaces: (knownPlaces ?? []).map((p) => p.name),
+          });
+        } catch (err) {
+          // Outline sync is a bonus — never fail the writer's Review over it.
+          console.error('Entity extraction failed', err);
+        }
         await refsTask;
       }
     }
+
+    const raw = await suggestionsTask;
+    const suggestions = raw.map((s) => ({ id: nanoid(10), ...s }));
 
     return NextResponse.json({ suggestions, entities });
   } catch (err) {
