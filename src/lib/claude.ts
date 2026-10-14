@@ -3,7 +3,16 @@ import type { EntityInsight, EntityInsightCategory, OutlineSuggestionCategory, S
 
 let client: Anthropic | null = null;
 export function claude() {
-  if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  if (!client) {
+    // Keys that aren't scoped to a workspace must name one on every request.
+    // Set ANTHROPIC_WORKSPACE_ID (Netlify env) to use such a key; a
+    // workspace-scoped key needs nothing extra.
+    const workspaceId = process.env.ANTHROPIC_WORKSPACE_ID;
+    client = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      ...(workspaceId ? { defaultHeaders: { 'anthropic-workspace-id': workspaceId } } : {}),
+    });
+  }
   return client;
 }
 
