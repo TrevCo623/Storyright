@@ -20,12 +20,22 @@ export const MODEL = 'claude-sonnet-4-5';
 
 export interface RawSuggestion {
   category: SuggestionCategory;
-  kind: 'phrase' | 'flag';
+  kind: 'phrase' | 'flag' | 'pattern';
   phrase?: string;
   occurrence?: number;
   blockIndex?: number;
+  instances?: { phrase: string; occurrence: number }[];
+  praise?: boolean;
   heading: string;
   desc: string;
+}
+
+// A note the writer closed on an earlier Review — used to tune future ones.
+export interface FeedbackExample {
+  category: SuggestionCategory;
+  heading: string;
+  desc: string;
+  praise?: boolean;
 }
 
 // Pulls the first top-level JSON array out of a Claude response, tolerating
@@ -71,13 +81,17 @@ const CATEGORY_HEADINGS: Record<SuggestionCategory, string> = {
 interface GenerateArgs {
   title: string;
   paragraphs: string[];
-  existing: { category: SuggestionCategory; phrase?: string; blockIndex?: number }[];
+  existing: { category: SuggestionCategory; phrase?: string; blockIndex?: number; instances?: string[] }[];
   manifesto?: string | null;
   fingerprintSummary?: string | null;
+  // Notes the writer dismissed recently (newest first) — signals of what not to surface.
+  dismissed?: FeedbackExample[];
+  // How many kudos notes the writer acknowledged with "Thanks" recently.
+  praiseThanked?: number;
 }
 
 export async function generateSuggestions(args: GenerateArgs): Promise<RawSuggestion[]> {
-  const { title, paragraphs, existing, manifesto, fingerprintSummary } = args;
+  const { title, paragraphs, existing, manifesto, fingerprintSummary, dismissed, praiseThanked } = args;
   if (paragraphs.join('').trim().length < 20) return [];
 
   const numberedParagraphs = paragraphs
@@ -86,7 +100,13 @@ export async function generateSuggestions(args: GenerateArgs): Promise<RawSugges
 
   const existingList = existing.length
     ? existing
-        .map((e) => (e.phrase ? `- ${e.category}: "${e.phrase}"` : `- ${e.category}: paragraph ${e.blockIndex}`))
+        .map((e) =>
+          e.instances?.length
+            ? `- ${e.category} (recurring pattern): ${e.instances.map((p) => `"${p}"`).join(', ')}`
+            : e.phrase
+              ? `- ${e.category}: "${e.phrase}"`
+              : `- ${e.category}: paragraph ${e.blockIndex}`
+        )
         .join('\n')
     : 'none';
 
@@ -97,19 +117,36 @@ export async function generateSuggestions(args: GenerateArgs): Promise<RawSugges
     .filter(Boolean)
     .join('\n');
 
+  // What the writer has told us by dismissing notes (and by thanking kudos).
+  const tuning = [
+    dismissed?.length
+      ? `Notes this writer DISMISSED on earlier reviews (newest first). Each dismissal means "less of this". Don't surface notes of the same type — the same kind of issue or the same advice — again; if several dismissals share a category or theme, surface fewer notes there overall. Only override this for a clear, objective error (e.g. a genuine grammar mistake).
+${dismissed
+  .map((d) => `- [${d.category}${d.praise ? ', kudos' : ''}] ${d.heading}: ${d.desc}`)
+  .join('\n')}`
+      : null,
+    praiseThanked
+      ? `The writer has thanked ${praiseThanked} kudos note${praiseThanked === 1 ? '' : 's'} recently — they value hearing what's working. When something genuinely lands, include one kudos note.`
+      : null,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
   const system = `You are Storyright's editing assistant. You analyze a piece of writing on demand (never continuously) and surface a small, high-signal set of suggestions grouped into exactly five categories: "word" (word choice — repetition, vague verbs, stronger alternatives), "tone" (voice & tone — consistency with the writer's stated voice), "grammar" (clarity & grammar — genuine errors or confusing constructions, not style nitpicks), "pacing" (pacing & structure — a specific paragraph that runs long or drags relative to the rest of the piece; this is the only category anchored to a whole paragraph rather than a phrase), "style" (style & craft — can be a compliment on something that's working, not only criticism).
 
 Rules:
 - Return ONLY a JSON array, no prose, no markdown fences.
-- Each item: {"category": "word"|"tone"|"grammar"|"pacing"|"style", "kind": "phrase"|"flag", "phrase": exact substring copied verbatim from the text (required, only for kind "phrase"), "occurrence": 1-based index of which occurrence of that phrase to flag if it appears more than once (default 1), "blockIndex": the paragraph number in brackets like [0] (required, only for kind "flag"), "heading": 2-4 word label, "desc": one or two sentence explanation written directly to the writer.
+- Each item: {"category": "word"|"tone"|"grammar"|"pacing"|"style", "kind": "phrase"|"flag"|"pattern", "phrase": exact substring copied verbatim from the text (required, only for kind "phrase"), "occurrence": 1-based index of which occurrence of that phrase to flag if it appears more than once (default 1), "blockIndex": the paragraph number in brackets like [0] (required, only for kind "flag"), "instances": [{"phrase": exact verbatim substring, "occurrence": 1-based index}] (required, only for kind "pattern"), "heading": 2-4 word label, "desc": one or two sentence explanation written directly to the writer.
 - "phrase" must be an exact, short (2-10 word) substring that appears verbatim in the numbered paragraphs — never paraphrase it.
+- Use kind "pattern" when the issue is a construction that recurs across the piece rather than one spot — e.g. several sentences built the same way (opening with a participle, an "X, and then Y" rhythm), a repeated word or tic, a run of same-length sentences. List every instance (2-8) in reading order. Each instance "phrase" is an exact verbatim substring identifying that occurrence: the whole sentence if it's 25 words or fewer, otherwise its distinctive opening (up to 15 words). A pattern counts as one suggestion; don't also flag its instances individually.
 - Do not repeat or restate any suggestion already listed as existing/open below.
 - Favor a small number of genuinely useful suggestions over an exhaustive list — at most 5, often fewer. Suggestion fatigue is the #1 complaint about tools like this; only surface what's actually worth the writer's attention.
+- Set "praise": true on a note that compliments something working (kudos) rather than asking for a change. Kudos are kind "phrase", usually category "style".
 - If the writing is already clean and nothing else is worth flagging, return an empty array [].`;
 
   const user = `Title: ${title || 'Untitled'}
 
-${personalization ? personalization + '\n\n' : ''}Already-open suggestions (do not repeat these):
+${personalization ? personalization + '\n\n' : ''}${tuning ? tuning + '\n\n' : ''}Already-open suggestions (do not repeat these):
 ${existingList}
 
 Numbered paragraphs:
@@ -132,15 +169,102 @@ ${numberedParagraphs}`;
     .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
     .map((item) => ({
       category: (item.category as SuggestionCategory) ?? 'style',
-      kind: (item.kind === 'flag' ? 'flag' : 'phrase') as 'flag' | 'phrase',
+      kind: (item.kind === 'flag' ? 'flag' : item.kind === 'pattern' ? 'pattern' : 'phrase') as RawSuggestion['kind'],
+      praise: item.praise === true,
+      instances: Array.isArray(item.instances)
+        ? (item.instances as unknown[])
+            .filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null && typeof (x as Record<string, unknown>).phrase === 'string')
+            .map((x) => ({ phrase: String(x.phrase), occurrence: typeof x.occurrence === 'number' ? x.occurrence : 1 }))
+        : undefined,
       phrase: typeof item.phrase === 'string' ? item.phrase : undefined,
       occurrence: typeof item.occurrence === 'number' ? item.occurrence : 1,
       blockIndex: typeof item.blockIndex === 'number' ? item.blockIndex : undefined,
       heading: typeof item.heading === 'string' ? item.heading : CATEGORY_HEADINGS[(item.category as SuggestionCategory) ?? 'style'],
       desc: typeof item.desc === 'string' ? item.desc : '',
     }))
-    .filter((s) => (s.kind === 'phrase' ? !!s.phrase : typeof s.blockIndex === 'number'));
+    .filter((s) =>
+      s.kind === 'phrase' ? !!s.phrase : s.kind === 'pattern' ? (s.instances?.length ?? 0) >= 2 : typeof s.blockIndex === 'number'
+    );
 }
+
+// ---------- Alternatives (per-suggestion "show me options") ----------
+
+export interface AlternativesArgs {
+  category: SuggestionCategory;
+  heading: string;
+  desc: string;
+  phrase: string; // the flagged passage
+  sentence: string; // the full sentence containing it
+  paragraph: string; // the surrounding paragraph, for voice/context
+  target?: 'passage' | 'paragraph'; // paragraph: rewrite the whole thing (pacing flags)
+  avoid?: string[]; // options already shown — used by "More options"
+  manifesto?: string | null;
+  fingerprintSummary?: string | null;
+}
+
+export interface AlternativesResult {
+  // phrase: each option replaces just the flagged passage.
+  // sentence: each option replaces the whole sentence around it.
+  scope: 'phrase' | 'sentence' | 'paragraph';
+  options: string[];
+}
+
+export async function generateAlternatives(args: AlternativesArgs): Promise<AlternativesResult> {
+  const personalization = [
+    args.manifesto ? `The writer's stated manifesto/preferences: ${args.manifesto}` : null,
+    args.fingerprintSummary ? `Their style fingerprint (from past work): ${args.fingerprintSummary}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  if (args.target === 'paragraph') return generateParagraphRewrites(args, personalization);
+
+  const system = `You are Storyright's editing assistant. The writer is looking at one of your editing notes and wants concrete alternatives they can drop straight into their draft.
+
+Rules:
+- Return ONLY a JSON object, no prose, no markdown fences: {"scope": "phrase"|"sentence", "options": [string, string, string]}.
+- Pick scope "phrase" when swapping just the flagged passage fixes the issue (word choice, a single clunky phrase). Pick "sentence" when the fix needs the sentence rebuilt (tone of the whole sentence, structure, rhythm, grammar that spans it).
+- With scope "phrase", each option must read naturally when substituted for the flagged passage inside the sentence as written. With scope "sentence", each option is a complete replacement sentence, including its ending punctuation.
+- Give exactly 3 options that are genuinely different from each other (not synonyms of one idea), each fixing the issue the note describes.
+- Stay in the writer's voice, tense, and point of view. Don't add new plot facts or change meaning.
+- Never return the original text as an option.`;
+
+  const avoid = args.avoid?.length
+    ? `\nThe writer already saw these options; give different ones:\n${args.avoid.map((o) => `- ${o}`).join('\n')}\n`
+    : '';
+  const user = `Editing note (${args.category}): ${args.heading} — ${args.desc}
+
+Flagged passage: "${args.phrase}"
+Sentence: "${args.sentence}"
+Paragraph for context:
+"""
+${args.paragraph}
+"""
+${avoid}${personalization ? '\n' + personalization : ''}`;
+
+  const response = await claude().messages.create({
+    model: MODEL,
+    max_tokens: 700,
+    system,
+    messages: [{ role: 'user', content: user }],
+  });
+
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+
+  const obj = extractJsonObject(text);
+  const rawOptions: unknown[] = Array.isArray(obj?.options) ? (obj?.options as unknown[]) : [];
+  const options = rawOptions
+    .filter((o): o is string => typeof o === 'string' && o.trim().length > 0)
+    .map((o) => o.trim())
+    .filter((o) => o !== args.phrase && o !== args.sentence)
+    .slice(0, 3);
+  const scope = obj?.scope === 'sentence' ? 'sentence' : 'phrase';
+  return { scope, options };
+}
+
 
 interface FingerprintArgs {
   manifesto?: string;
@@ -521,4 +645,100 @@ ${threads.length ? threads.map((t) => `- ${t}`).join('\n') : '(none)'}`;
     }))
     .filter((i) => i.heading && i.desc);
   return { summary, items };
+}
+
+// Iterate on a paragraph-level note (pacing): three full rewrites of the paragraph.
+async function generateParagraphRewrites(args: AlternativesArgs, personalization: string): Promise<AlternativesResult> {
+  const system = `You are Storyright's editing assistant. The writer is looking at a note about a whole paragraph and wants concrete rewrites they can drop straight into their draft.
+
+Rules:
+- Return ONLY a JSON object, no prose, no markdown fences: {"options": [string, string, string]}.
+- Each option is a complete replacement for the paragraph that addresses the note (for pacing: tighter, or restructured so it moves), as plain prose with no line breaks.
+- Make the three genuinely different approaches (e.g. trim hard, restructure, cut to the essential image), not light variations.
+- Keep the writer's voice, tense, point of view, and every plot fact. Don't invent new events.`;
+
+  const avoid = args.avoid?.length
+    ? `\nThe writer already saw these; give different ones:\n${args.avoid.map((o) => `- ${o}`).join('\n')}\n`
+    : '';
+  const user = `Editing note (${args.category}): ${args.heading} — ${args.desc}
+
+Paragraph:
+"""
+${args.paragraph}
+"""
+${avoid}${personalization ? '\n' + personalization : ''}`;
+
+  const response = await claude().messages.create({
+    model: MODEL,
+    max_tokens: 2000,
+    system,
+    messages: [{ role: 'user', content: user }],
+  });
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+  const obj = extractJsonObject(text);
+  const rawOptions: unknown[] = Array.isArray(obj?.options) ? (obj?.options as unknown[]) : [];
+  const options = rawOptions
+    .filter((o): o is string => typeof o === 'string' && o.trim().length > 0)
+    .map((o) => o.trim().replace(/\s*\n+\s*/g, ' '))
+    .filter((o) => o !== args.paragraph)
+    .slice(0, 3);
+  return { scope: 'paragraph', options };
+}
+
+// ---------- Ask (free-form questions about one piece of the story) ----------
+
+export interface AskArgs {
+  storyContext: string; // from buildStoryContext
+  targetLabel: string; // e.g. `Thread "The ferry ledger"`
+  includeThreads: boolean;
+  history: { role: 'user' | 'assistant'; content: string; quote?: string }[];
+  manifesto?: string | null;
+  fingerprintSummary?: string | null;
+}
+
+// Streams Claude's answer as plain text chunks. The caller collects the full
+// reply to save it once the stream ends.
+export async function* streamAskReply(args: AskArgs): AsyncGenerator<string> {
+  const personalization = [
+    args.manifesto ? `The writer's stated manifesto/preferences: ${args.manifesto}` : null,
+    args.fingerprintSummary ? `Their style fingerprint (from past work): ${args.fingerprintSummary}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const system = `You are Storyright's story-development partner — a sharp, warm editor who knows this manuscript inside out. The writer is asking about ${args.targetLabel}. The full story as it stands is below: summary, chapters, characters and places.
+
+How to answer:
+- Give a few distinct, concrete thoughts on how to treat it — usually 2–4 options. Start each with a short **bold lead-in**, then 1–3 sentences.
+- Ground every thought in specifics from the story: name the chapters, characters, places, images and themes it could connect to, and say how (e.g. which scene it could slot into, which arc it deepens, which motif it echoes).
+- Prefer real connections already latent in the writing over generic craft advice. Respect what's established, and flag it plainly if an idea would contradict something.
+- ${args.includeThreads ? 'Other threads are included below; they are ideas, not canon — you may draw on them, but say when you do.' : "Only the chapters, characters and places are canon. Don't assume any other threads exist."}
+- Don't rewrite the writer's prose unless they ask; a short illustrative line is fine.
+- Plain text only: **bold** and "- " bullet lines are fine, no headings. Keep it under about 300 words unless they ask for more.
+- If the question is ambiguous, answer the most likely reading, then end with one short question.
+${personalization ? '\n' + personalization + '\n' : ''}
+=== THE STORY ===
+
+${args.storyContext}`;
+
+  const messages = args.history.map((m) => ({
+    role: m.role,
+    content: m.role === 'user' && m.quote ? `About this passage:\n"""\n${m.quote}\n"""\n\n${m.content}` : m.content,
+  }));
+
+  const stream = claude().messages.stream({
+    model: MODEL,
+    max_tokens: 1200,
+    system,
+    messages,
+  });
+
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+      yield event.delta.text;
+    }
+  }
 }

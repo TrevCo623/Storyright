@@ -13,11 +13,20 @@ export const suggestionPluginKey = new PluginKey<DecorationSet>('storyrightSugge
 export interface VisibleSuggestion {
   id: string;
   category: SuggestionCategory;
-  kind: 'phrase' | 'flag';
+  kind: 'phrase' | 'flag' | 'pattern';
   heading: string;
   phrase?: string;
   occurrence?: number;
   blockIndex?: number;
+  // pattern only: the still-open instances (caller filters resolved ones).
+  instances?: { id: string; phrase: string; occurrence: number }[];
+}
+
+// What's currently selected: a suggestion, and for a pattern optionally one
+// of its instances. Drives the "active" chip styling and focus mode.
+export interface ActiveTarget {
+  id: string | null;
+  instanceId?: string | null;
 }
 
 export interface BlockInfo {
@@ -111,13 +120,74 @@ export function locatePhraseInDoc(doc: PMNode, phrase: string, occurrence = 1): 
   return locatePhrase(text, map, phrase, occurrence);
 }
 
-function buildDecorations(doc: PMNode, suggestions: VisibleSuggestion[], activeId: string | null): DecorationSet {
+export interface PassageContext {
+  phraseRange: PhraseRange;
+  sentenceRange: PhraseRange;
+  phrase: string;
+  sentence: string;
+  paragraph: string;
+  blockIndex: number;
+}
+
+// A whole paragraph as the target (pacing flags): Iterate rewrites all of it.
+export function getBlockContext(doc: PMNode, blockIndex: number): PassageContext | null {
+  const block = getTopLevelBlocks(doc)[blockIndex];
+  if (!block || !block.node.isTextblock) return null;
+  const text = block.node.textContent;
+  const range = { from: block.pos + 1, to: block.pos + block.node.nodeSize - 1 };
+  return { phraseRange: range, sentenceRange: range, phrase: text, sentence: text, paragraph: text, blockIndex };
+}
+
+// Sentence terminators, optionally followed by closing quotes/brackets.
+const SENTENCE_END = /[.!?…]+["'”’)\]]*/g;
+
+// Locates a flagged phrase and the sentence + paragraph around it — the
+// context the Alternatives call needs, and the range an option replaces.
+export function getPassageContext(doc: PMNode, phrase: string, occurrence = 1): PassageContext | null {
+  const blocks = getTopLevelBlocks(doc);
+  const { text, map } = buildFullText(blocks);
+  const range = locatePhrase(text, map, phrase, occurrence);
+  if (!range) return null;
+  const block = blocks.find((b) => range.from > b.pos && range.from < b.pos + b.node.nodeSize);
+  if (!block) return null;
+  const para = block.node.textContent;
+  const base = block.pos + 1;
+  const pStart = range.from - base;
+  const pEnd = range.to - base;
+
+  // Sentence start: just past the last terminator (+ whitespace) before the phrase.
+  let sStart = 0;
+  let sEnd = para.length;
+  SENTENCE_END.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = SENTENCE_END.exec(para))) {
+    const endIdx = m.index + m[0].length;
+    if (endIdx <= pStart) {
+      sStart = endIdx;
+    } else if (m.index >= pEnd - 1 || endIdx > pEnd) {
+      sEnd = Math.max(endIdx, pEnd);
+      break;
+    }
+  }
+  while (sStart < pStart && /\s/.test(para[sStart])) sStart++;
+
+  return {
+    phraseRange: range,
+    sentenceRange: { from: base + sStart, to: base + sEnd },
+    phrase,
+    sentence: para.slice(sStart, sEnd),
+    paragraph: para,
+    blockIndex: block.index,
+  };
+}
+
+function buildDecorations(doc: PMNode, suggestions: VisibleSuggestion[], active: ActiveTarget): DecorationSet {
   const blocks = getTopLevelBlocks(doc);
   const { text, map } = buildFullText(blocks);
   const decorations: Decoration[] = [];
 
   for (const s of suggestions) {
-    const isActive = s.id === activeId;
+    const isActive = s.id === active.id;
     if (s.kind === 'phrase' && s.phrase) {
       const range = locatePhrase(text, map, s.phrase, s.occurrence ?? 1);
       if (!range) continue;
@@ -128,6 +198,23 @@ function buildDecorations(doc: PMNode, suggestions: VisibleSuggestion[], activeI
           'data-tag': s.category,
         })
       );
+    } else if (s.kind === 'pattern' && s.instances) {
+      for (const inst of s.instances) {
+        const range = locatePhrase(text, map, inst.phrase, inst.occurrence);
+        if (!range) continue;
+        // With one instance picked, it's the active chip and its siblings
+        // stay faintly marked so the writer can still see the pattern.
+        const instActive = isActive && (!active.instanceId || active.instanceId === inst.id);
+        const sibling = isActive && !instActive;
+        decorations.push(
+          Decoration.inline(range.from, range.to, {
+            class: `sug-chip sug-instance${instActive ? ' active' : ''}${sibling ? ' sibling' : ''}`,
+            'data-sug': s.id,
+            'data-inst': inst.id,
+            'data-tag': s.category,
+          })
+        );
+      }
     } else if (s.kind === 'flag' && typeof s.blockIndex === 'number') {
       const block = blocks[s.blockIndex];
       if (!block) continue;
@@ -145,18 +232,18 @@ function buildDecorations(doc: PMNode, suggestions: VisibleSuggestion[], activeI
           { side: -1, key: `flag-${s.id}-${isActive}` }
         )
       );
+      // Focus mode: the whole flagged paragraph stays lit.
+      if (isActive) {
+        decorations.push(Decoration.node(block.pos, block.pos + block.node.nodeSize, { class: 'focus-block' }));
+      }
     }
   }
 
   return DecorationSet.create(doc, decorations);
 }
 
-export function setSuggestionDecorations(
-  editor: Editor,
-  suggestions: VisibleSuggestion[],
-  activeId: string | null
-) {
-  const decorations = buildDecorations(editor.state.doc, suggestions, activeId);
+export function setSuggestionDecorations(editor: Editor, suggestions: VisibleSuggestion[], active: ActiveTarget) {
+  const decorations = buildDecorations(editor.state.doc, suggestions, active);
   const tr = editor.state.tr.setMeta(suggestionPluginKey, decorations);
   editor.view.dispatch(tr);
 }
@@ -164,7 +251,7 @@ export function setSuggestionDecorations(
 export interface SuggestionHighlightOptions {
   // A ref-like box so the click handler always calls the latest callback,
   // even though the ProseMirror plugin is only constructed once.
-  onSuggestionClickRef: { current: (id: string) => void };
+  onSuggestionClickRef: { current: (id: string, instanceId: string | null) => void };
 }
 
 export const SuggestionHighlight = Extension.create<SuggestionHighlightOptions>({
@@ -199,7 +286,7 @@ export const SuggestionHighlight = Extension.create<SuggestionHighlightOptions>(
               if (target) {
                 const id = target.getAttribute('data-sug');
                 if (id) {
-                  onSuggestionClickRef.current(id);
+                  onSuggestionClickRef.current(id, target.getAttribute('data-inst'));
                   return true;
                 }
               }

@@ -56,6 +56,7 @@ export default async function EntryPage({
       subjectTitle={subject.title ?? ''}
       entry={normalized}
       crumbPrefix={crumbPrefix}
+      sectionType={sections.type}
     />
   );
 }

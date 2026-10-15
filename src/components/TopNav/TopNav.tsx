@@ -52,6 +52,11 @@ interface Props {
   right: ReactNode;
   /** Use the editor's collision point even though this page's right cluster is narrower. */
   matchEditorBreakpoint?: boolean;
+  /** Where the back link (top left) goes, and what it says. Defaults to all stories. */
+  backHref?: string;
+  backLabel?: string;
+  /** Runs instead of plain navigation (e.g. to tidy up before leaving). */
+  onBack?: () => void;
 }
 
 interface CompactState {
@@ -69,6 +74,9 @@ export default function TopNav({
   onSelectTab,
   right,
   matchEditorBreakpoint = false,
+  backHref = '/subjects',
+  backLabel,
+  onBack,
 }: Props) {
   const probeRef = useRef<HTMLDivElement | null>(null);
   const backRef = useRef<HTMLAnchorElement | null>(null);
@@ -163,9 +171,22 @@ export default function TopNav({
     <header className={className} style={style}>
       <div className="topnav-probe" ref={probeRef} aria-hidden="true" />
       <div className="topnav-left">
-        <Link href="/subjects" className="topnav-back" ref={backRef} title="Back to all projects">
+        <Link
+          href={backHref}
+          className="topnav-back"
+          ref={backRef}
+          title={backHref === '/subjects' ? 'Back to all stories' : 'Back to the outline'}
+          onClick={
+            onBack
+              ? (e) => {
+                  e.preventDefault();
+                  onBack();
+                }
+              : undefined
+          }
+        >
           <ChevronLeftIcon />
-          <span className="topnav-back-name">{subjectTitle || 'Untitled'}</span>
+          <span className="topnav-back-name">{backLabel ?? (subjectTitle || 'Untitled')}</span>
         </Link>
         <div className="topnav-menu-wrap">
           <button

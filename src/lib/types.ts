@@ -18,10 +18,21 @@ export interface SearchResult {
   snippet: string;
 }
 
+// One occurrence of a recurring pattern (e.g. three sentences that all open
+// with a participle). Each instance is resolved on its own; its id lives in
+// the same doneIds / dismissedIds lists as whole suggestions.
+export interface SuggestionInstance {
+  id: string; // `${parentId}.${index}`
+  phrase: string;
+  occurrence: number;
+}
+
 export interface SuggestionDef {
   id: string;
   category: SuggestionCategory;
-  kind: 'phrase' | 'flag';
+  // phrase: one passage · flag: a whole paragraph (pacing) · pattern: a
+  // recurring construction, flagged once with each instance listed.
+  kind: 'phrase' | 'flag' | 'pattern';
   heading: string;
   desc: string;
   // phrase suggestions locate text via search; flag suggestions (pacing)
@@ -29,6 +40,9 @@ export interface SuggestionDef {
   phrase?: string;
   occurrence?: number;
   blockIndex?: number;
+  instances?: SuggestionInstance[];
+  // A compliment on something that's working (kudos) rather than a fix.
+  praise?: boolean;
 }
 
 export interface SuggestionState {
@@ -205,6 +219,29 @@ export interface AdviceThread {
   updated_at: string;
 }
 
+// ---------- Ask (free-form questions about one piece of the story) ----------
+export type AskTargetKind = 'story' | 'entry' | 'character' | 'place';
+export interface AskTarget {
+  kind: AskTargetKind;
+  id?: string | null; // null for 'story'
+}
+export interface AskMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+  quote?: string; // a highlighted passage the question is about
+}
+export interface AskConversation {
+  id: string;
+  user_id: string;
+  subject_id: string;
+  target_kind: AskTargetKind;
+  target_id: string | null;
+  messages: AskMessage[];
+  created_at: string;
+  updated_at: string;
+}
+
 // Minimal Supabase Database type — typed loosely (Record) rather than fully
 // generated, since this project isn't running `supabase gen types` yet.
 // Swap for generated types once the schema stabilizes.
@@ -218,6 +255,7 @@ export type Database = {
       characters: { Row: Character; Insert: Partial<Character>; Update: Partial<Character> };
       places: { Row: Place; Insert: Partial<Place>; Update: Partial<Place> };
       entity_mentions: { Row: EntityMention; Insert: Partial<EntityMention>; Update: Partial<EntityMention> };
+      ask_conversations: { Row: AskConversation; Insert: Partial<AskConversation>; Update: Partial<AskConversation> };
       suggestion_feedback: {
         Row: { id: string; user_id: string; entry_id: string; suggestion_id: string; category: string; outcome: SuggestionOutcome; created_at: string };
         Insert: Record<string, unknown>;

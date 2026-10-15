@@ -8,6 +8,7 @@ import ProjectSearch from '@/components/ProjectSearch';
 import ResumeWriting from '@/components/ResumeWriting';
 import RecentEdits, { type RecentItem } from '@/components/Outline/RecentEdits';
 import DashedOutline from '@/components/DashedOutline';
+import AskPanel, { type AskTargetOption } from '@/components/Ask/AskPanel';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import TrashIcon from '@/components/icons/TrashIcon';
 import { SearchIcon, GripVerticalIcon, PlusIcon } from '@/components/icons';
@@ -84,6 +85,20 @@ export default function OutlineView({
   const [chapters, setChapters] = useState(initialChapters);
   const [characters, setCharacters] = useState(initialCharacters);
   const [places, setPlaces] = useState(initialPlaces);
+  // Insights → Ask: what the question is about (defaults to the whole story).
+  const storyOption: AskTargetOption = { target: { kind: 'story', id: null }, name: 'Whole story', kindLabel: 'Story' };
+  const [askOption, setAskOption] = useState<AskTargetOption>(storyOption);
+  const askOptions: AskTargetOption[] = [
+    storyOption,
+    ...chapters.map((c, i) => ({
+      target: { kind: 'entry' as const, id: c.id },
+      name: `${i + 1}. ${c.title || 'Untitled'}`,
+      kindLabel: 'Chapter' as const,
+    })),
+    ...characters.map((c) => ({ target: { kind: 'character' as const, id: c.id }, name: c.name || 'Untitled', kindLabel: 'Character' as const })),
+    ...places.map((p) => ({ target: { kind: 'place' as const, id: p.id }, name: p.name || 'Untitled', kindLabel: 'Place' as const })),
+    ...threads.map((t) => ({ target: { kind: 'entry' as const, id: t.id }, name: t.title || 'Untitled', kindLabel: 'Thread' as const })),
+  ];
 
   const [addingThread, setAddingThread] = useState(false);
   const [editingThread, setEditingThread] = useState<Entry | null>(null);
@@ -551,6 +566,8 @@ export default function OutlineView({
       <main className="editor-area outline-area">
       <TopNav
         subjectTitle={title}
+        backHref="/subjects"
+        backLabel="All Stories"
         mode="static"
         activeTab={activeTab}
         onSelectTab={selectTab}
@@ -576,6 +593,19 @@ export default function OutlineView({
           {/* ---------- Insights (outline review results) ---------- */}
           <div className={`tab-panel${activeTab === 'insights' ? ' active' : ''}`}>
             <section className="outline-section" style={{ marginTop: 16 }}>
+              <div className="section-label">Ask</div>
+              <AskPanel
+                subjectId={subjectId}
+                variant="page"
+                target={askOption.target}
+                targetName={askOption.name}
+                kindLabel={askOption.kindLabel}
+                options={askOptions}
+                onTargetChange={setAskOption}
+              />
+            </section>
+            <section className="outline-section">
+              <div className="section-label">Outline review</div>
               {!review ? (
                 <button className="empty-tile" onClick={runOutlineReview} disabled={reviewing}>
                   <DashedOutline />

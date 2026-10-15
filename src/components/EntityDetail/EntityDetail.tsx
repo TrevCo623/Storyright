@@ -9,6 +9,7 @@ import ProjectSearch from '@/components/ProjectSearch';
 import ResumeWriting from '@/components/ResumeWriting';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import DashedOutline from '@/components/DashedOutline';
+import AskPanel from '@/components/Ask/AskPanel';
 import { PlusIcon, SearchIcon } from '@/components/icons';
 import { entityTerms, findAppearances, type ChapterLite } from '@/lib/appearances';
 import {
@@ -474,9 +475,24 @@ export default function EntityDetail({
         </>
       );
     }
-    // insights
+    // insights: Ask about this character/place, then the Review results
+    const ask = (
+      <>
+        <div className="section-label">Ask</div>
+        <AskPanel
+          subjectId={subjectId}
+          variant="page"
+          target={{ kind: isCharacter ? 'character' : 'place', id: entity.id }}
+          targetName={displayName}
+          kindLabel={isCharacter ? 'Character' : 'Place'}
+        />
+        <div className="section-label">Review</div>
+      </>
+    );
     if (!review) {
       return (
+        <>
+        {ask}
         <button type="button" className="empty-tile" onClick={() => void runReview()} disabled={reviewing}>
           <DashedOutline />
           <div className="empty-tile-title">See {displayName} through fresh eyes.</div>
@@ -485,10 +501,12 @@ export default function EntityDetail({
           </div>
           <div className="empty-tile-circle">✦</div>
         </button>
+        </>
       );
     }
     return (
       <>
+        {ask}
         {review.summary && <p className="insights-summary">{review.summary}</p>}
         <div className="insights-table">
           <div className="insights-header-row">
@@ -521,6 +539,8 @@ export default function EntityDetail({
         subjectTitle={subjectTitle}
         mode="hover"
         crumb={`${cfg.listLabel} – ${displayName}`}
+        backHref={`/subjects/${subjectId}?tab=${cfg.listTab}`}
+        onBack={() => void leaveTo(`/subjects/${subjectId}?tab=${cfg.listTab}`)}
         onSelectTab={(t) => void leaveTo(`/subjects/${subjectId}?tab=${t}`)}
         matchEditorBreakpoint
         right={
