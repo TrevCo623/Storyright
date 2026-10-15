@@ -1,9 +1,21 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Storyright',
   description: 'A quiet place to write, with feedback tuned to your own voice.',
+  applicationName: 'Storyright',
+  // Icons come from app/favicon.ico, app/icon.png and app/apple-icon.png;
+  // the install manifest from app/manifest.ts.
+  appleWebApp: { capable: true, title: 'Storyright', statusBarStyle: 'black' },
+};
+
+// Browser chrome tint (mobile Safari/Chrome address bar) — matches the app background.
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)', color: '#17181b' },
+    { media: '(prefers-color-scheme: light)', color: '#f2f2f2' },
+  ],
 };
 
 // Sets data-theme before paint (dark by default, per the locked visual

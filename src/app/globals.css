@@ -1955,8 +1955,8 @@ html[data-theme='light'] .topnav-menu { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.
 /* Characters / Places as vertical cards, side by side. Main / Key: tall cards
    like the story cards on Projects; supporting / other: smaller cards. */
 .entity-cards { display: grid; gap: 16px; }
-.entity-cards-large { grid-template-columns: repeat(auto-fill, minmax(calc(240px * var(--text-scale)), 1fr)); }
-.entity-cards-small { grid-template-columns: repeat(auto-fill, minmax(calc(180px * var(--text-scale)), 1fr)); }
+.entity-cards-large { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.entity-cards-small { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .entity-card.card-large, .entity-card.card-small {
   display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden;
   padding: 24px 20px;
@@ -1978,3 +1978,12 @@ html[data-theme='light'] .topnav-menu { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.
 .entity-cards .entity-add-tile { flex-direction: column; height: calc(196px * var(--text-scale)); padding: 18px; text-align: center; }
 .entity-card.card-large .entity-suggest-text, .entity-card.card-small .entity-suggest-text { flex-basis: 100%; }
 .entity-card.card-small:has(.entity-suggest) .entity-summary.clamped { -webkit-line-clamp: 1; }
+
+/* Outline pages get a wider content column than the editor (which stays at the
+   tab-bar width for comfortable line lengths): centered, up to 1000px, so
+   Characters / Places fit three large cards across. */
+.outline-area .outline-column {
+  width: min(1000px, calc(100% - 2 * var(--footer-x)));
+  margin-left: auto;
+  margin-right: auto;
+}
