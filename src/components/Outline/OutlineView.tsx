@@ -11,7 +11,7 @@ import DashedOutline from '@/components/DashedOutline';
 import AskPanel, { type AskTargetOption } from '@/components/Ask/AskPanel';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import TrashIcon from '@/components/icons/TrashIcon';
-import { SearchIcon, GripVerticalIcon, PlusIcon } from '@/components/icons';
+import { SearchIcon, GripVerticalIcon, PlusIcon, StarIcon } from '@/components/icons';
 import type { Character, Entry, EntityMention, OutlineReview, OutlineSuggestionCategory, Place, SearchResult } from '@/lib/types';
 import { createEntry, deleteEntry, renameEntry } from '@/app/subjects/[subjectId]/actions';
 import {
@@ -457,7 +457,7 @@ export default function OutlineView({
   // Main / Supporting (Key / Other) groups. Main keeps your order; the rest
   // sorts by how many chapters they appear in, and anyone in at least half the
   // chapters gets a "Mark as main?" nudge you can accept or wave off.
-  function renderEntityGroups(kind: 'character' | 'place') {
+  function renderEntityGroups(kind: 'character' | 'place', addTile: React.ReactNode) {
     const isCharacter = kind === 'character';
     const list: (Character | Place)[] = isCharacter ? characters : places;
     const isFlagged = (x: Character | Place) => (isCharacter ? (x as Character).is_main : (x as Place).is_key);
@@ -476,15 +476,22 @@ export default function OutlineView({
       }
     }
 
+    // Main / Key → large cards (like story cards on Projects); the rest → small cards.
     const card = ({ x, n }: { x: Character | Place; n: number }) => (
       <EntityCard
         key={x.id}
+        size={isFlagged(x) ? 'large' : 'small'}
         name={x.name || (isCharacter ? 'Unnamed character' : 'Unnamed place')}
         role={isCharacter ? (x as Character).role : undefined}
-        summary={(x.summary || '').split(/\n+/)[0]}
+        summary={isFlagged(x) ? (x.summary || '').replace(/\n+/g, ' ') : (x.summary || '').split(/\n+/)[0]}
         clampSummary
         source={x.source}
         typeLabel={kind}
+        star={{
+          on: isFlagged(x),
+          label: isCharacter ? 'main character' : 'key location',
+          onToggle: () => void setFlag(x, isCharacter ? { is_main: !isFlagged(x) } : { is_key: !isFlagged(x) }),
+        }}
         onEdit={() => router.push(detailHref(kind, x.id))}
         onRequestDelete={() =>
           setConfirmDialog({
@@ -505,9 +512,8 @@ export default function OutlineView({
       >
         {!isFlagged(x) && !x.promote_dismissed && shouldSuggestPromote(n, chapters.length) && (
           <div className="entity-suggest" onClick={(e) => e.stopPropagation()}>
-            <span className="icon">✦</span>
-            <span>
-              Appears in {n} of {chapters.length} chapters
+            <span className="entity-suggest-text">
+              <span className="icon">✦</span> Appears in {n} of {chapters.length} chapters
             </span>
             <button
               type="button"
@@ -530,14 +536,17 @@ export default function OutlineView({
         {main.length === 0 ? (
           <p className="entity-group-empty">
             {isCharacter
-              ? 'No main characters yet. Open someone and switch on “Main character.”'
-              : 'No key locations yet. Open a place and switch on “Key location.”'}
+              ? 'No main characters yet. Star someone below to make them a main character.'
+              : 'No key locations yet. Star a place below to make it a key location.'}
           </p>
         ) : (
-          main.map(card)
+          <div className="entity-cards entity-cards-large">{main.map(card)}</div>
         )}
         <div className="section-label entity-group-gap">{labels[1]}</div>
-        {rest.map(card)}
+        <div className="entity-cards entity-cards-small">
+          {rest.map(card)}
+          {addTile}
+        </div>
       </>
     );
   }
@@ -756,12 +765,14 @@ export default function OutlineView({
                   </button>
                 ) : (
                   <>
-                    {renderEntityGroups('character')}
-                    <button className="entity-add-tile" onClick={() => void openNewEntity('character')}>
-                      <DashedOutline />
-                      <span className="chapter-add-tile-circle"><PlusIcon /></span>
-                      <span>Add a new character</span>
-                    </button>
+                    {renderEntityGroups(
+                      'character',
+                      <button className="entity-add-tile" onClick={() => void openNewEntity('character')}>
+                        <DashedOutline />
+                        <span className="chapter-add-tile-circle"><PlusIcon /></span>
+                        <span>Add a character</span>
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -780,12 +791,14 @@ export default function OutlineView({
                   </button>
                 ) : (
                   <>
-                    {renderEntityGroups('place')}
-                    <button className="entity-add-tile" onClick={() => void openNewEntity('place')}>
-                      <DashedOutline />
-                      <span className="chapter-add-tile-circle"><PlusIcon /></span>
-                      <span>Add a new place</span>
-                    </button>
+                    {renderEntityGroups(
+                      'place',
+                      <button className="entity-add-tile" onClick={() => void openNewEntity('place')}>
+                        <DashedOutline />
+                        <span className="chapter-add-tile-circle"><PlusIcon /></span>
+                        <span>Add a place</span>
+                      </button>
+                    )}
                   </>
                 )}
               </div>
@@ -1223,6 +1236,8 @@ function EntityCard({
   typeLabel,
   onEdit,
   onRequestDelete,
+  star,
+  size = 'row',
   children,
 }: {
   name: string;
@@ -1233,10 +1248,29 @@ function EntityCard({
   typeLabel: string;
   onEdit: () => void;
   onRequestDelete: () => void;
+  /** Characters / places: the Main (Key) toggle — a star in the card's corner. */
+  star?: { on: boolean; label: string; onToggle: () => void };
+  /** row: full-width row (threads) · large / small: vertical cards (characters, places). */
+  size?: 'row' | 'large' | 'small';
   children?: React.ReactNode;
 }) {
   return (
-    <div className="entity-card" onClick={onEdit}>
+    <div className={`entity-card${star ? ' has-star' : ''}${size !== 'row' ? ` card-${size}` : ''}`} onClick={onEdit}>
+      {star && (
+        <button
+          type="button"
+          className={`entity-star-btn${star.on ? ' is-on' : ''}`}
+          title={star.on ? `Unmark as ${star.label}` : `Mark as ${star.label}`}
+          aria-label={star.on ? `Unmark as ${star.label}` : `Mark as ${star.label}`}
+          aria-pressed={star.on}
+          onClick={(e) => {
+            e.stopPropagation();
+            star.onToggle();
+          }}
+        >
+          <StarIcon filled={star.on} />
+        </button>
+      )}
       <button
         className="entity-delete-btn"
         title={`Delete ${typeLabel}`}

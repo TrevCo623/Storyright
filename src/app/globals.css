@@ -1936,3 +1936,45 @@ html[data-theme='light'] .topnav-menu { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.
 .topnav-trail-link { color: inherit; text-decoration: none; max-width: 180px; transition: color 0.15s ease; }
 .topnav-trail-link:hover { color: var(--text-primary); }
 .topnav-trail-item:last-child .topnav-trail-link { color: var(--text-primary); }
+
+/* Main character / Key location star on Outline cards. Filled + always shown
+   when on; an outline star appears on hover otherwise. Delete moves one slot left. */
+.entity-card.has-star { padding-right: 88px; }
+.entity-card.has-star .entity-delete-btn { right: 52px; }
+.entity-star-btn {
+  position: absolute; top: 20px; right: 20px; width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm);
+  color: var(--text-tertiary); opacity: 0; pointer-events: none;
+  transition: opacity 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.entity-card:hover .entity-star-btn { opacity: 1; pointer-events: auto; }
+.entity-star-btn:hover { color: var(--text-primary); transform: scale(1.1); }
+.entity-star-btn.is-on { opacity: 1; pointer-events: auto; color: var(--accent); }
+.entity-star-btn.is-on:hover { color: var(--accent-text); }
+
+/* Characters / Places as vertical cards, side by side. Main / Key: tall cards
+   like the story cards on Projects; supporting / other: smaller cards. */
+.entity-cards { display: grid; gap: 16px; }
+.entity-cards-large { grid-template-columns: repeat(auto-fill, minmax(calc(240px * var(--text-scale)), 1fr)); }
+.entity-cards-small { grid-template-columns: repeat(auto-fill, minmax(calc(180px * var(--text-scale)), 1fr)); }
+.entity-card.card-large, .entity-card.card-small {
+  display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden;
+  padding: 24px 20px;
+}
+.entity-card.card-large { height: calc(300px * var(--text-scale)); }
+.entity-card.card-small { height: calc(196px * var(--text-scale)); padding: 20px 18px; }
+.entity-card.card-large .entity-card-head,
+.entity-card.card-small .entity-card-head { flex-wrap: wrap; row-gap: 6px; padding-right: 52px; margin-bottom: 6px; }
+.entity-card.card-large .entity-name { font-size: calc(22px * var(--text-scale)); }
+.entity-card.card-small .entity-name { font-size: calc(17px * var(--text-scale)); }
+.entity-card.card-large .entity-role, .entity-card.card-small .entity-role { margin: 0 0 12px; }
+.entity-card.card-large .entity-summary, .entity-card.card-small .entity-summary { font-size: calc(12.5px * var(--text-scale)); color: var(--text-secondary); }
+.entity-card.card-large .entity-summary.clamped { -webkit-line-clamp: 7; }
+.entity-card.card-small .entity-summary.clamped { -webkit-line-clamp: 3; }
+.entity-card.card-large .entity-star-btn, .entity-card.card-small .entity-star-btn { top: 14px; right: 14px; }
+.entity-card.card-large .entity-delete-btn, .entity-card.card-small .entity-delete-btn { top: 14px; right: 44px; }
+.entity-card.card-small .auto-badge { padding: 2px 8px 2px 6px; font-size: 10.5px; }
+.entity-card.card-large .entity-suggest, .entity-card.card-small .entity-suggest { margin-top: auto; padding-top: 12px; flex-wrap: wrap; row-gap: 6px; }
+.entity-cards .entity-add-tile { flex-direction: column; height: calc(196px * var(--text-scale)); padding: 18px; text-align: center; }
+.entity-card.card-large .entity-suggest-text, .entity-card.card-small .entity-suggest-text { flex-basis: 100%; }
+.entity-card.card-small:has(.entity-suggest) .entity-summary.clamped { -webkit-line-clamp: 1; }
