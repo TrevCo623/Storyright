@@ -1926,3 +1926,13 @@ html[data-theme='light'] .topnav-menu { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.
 .ask-panel.ask-page .ask-msg { font-size: 14px; }
 .ask-panel.ask-page .ask-msg.user { max-width: 70%; }
 .insights-section-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 14px; }
+
+/* Back breadcrumb (e.g. Story / Mara when a chapter was opened from Mara's page) */
+.topnav-trail { gap: 6px; color: var(--text-secondary); }
+.topnav-trail:hover { color: var(--text-secondary); }
+.topnav-trail:hover svg { transform: none; color: var(--text-tertiary); }
+.topnav-trail-item { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.topnav-trail-sep { color: var(--text-tertiary); font-size: 14px; }
+.topnav-trail-link { color: inherit; text-decoration: none; max-width: 180px; transition: color 0.15s ease; }
+.topnav-trail-link:hover { color: var(--text-primary); }
+.topnav-trail-item:last-child .topnav-trail-link { color: var(--text-primary); }

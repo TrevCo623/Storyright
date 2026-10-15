@@ -16,8 +16,10 @@ const SECTION_SINGULAR: Record<SectionType, string> = {
 
 export default async function EntryPage({
   params,
+  searchParams,
 }: {
   params: { subjectId: string; entryId: string };
+  searchParams: { from?: string };
 }) {
   const supabase = createClient();
   const [{ data: entry }, { data: subject }] = await Promise.all([
@@ -50,8 +52,23 @@ export default async function EntryPage({
     suggestion_state: entryFields.suggestion_state ?? emptySuggestionState(),
   };
 
+  // Opened from a character/place page (?from=character:<id>:<tab>) → the
+  // back link becomes a breadcrumb that can return there.
+  let from: { kind: 'character' | 'place'; id: string; name: string; tab: string } | undefined;
+  const [fromKind, fromId, fromTab] = (searchParams.from ?? '').split(':');
+  if ((fromKind === 'character' || fromKind === 'place') && fromId) {
+    const { data: ent } = await supabase
+      .from(fromKind === 'character' ? 'characters' : 'places')
+      .select('id, name')
+      .eq('id', fromId)
+      .eq('subject_id', params.subjectId)
+      .maybeSingle();
+    if (ent) from = { kind: fromKind, id: ent.id, name: ent.name || 'Untitled', tab: fromTab || 'appearances' };
+  }
+
   return (
     <EntryEditor
+      from={from}
       subjectId={params.subjectId}
       subjectTitle={subject.title ?? ''}
       entry={normalized}

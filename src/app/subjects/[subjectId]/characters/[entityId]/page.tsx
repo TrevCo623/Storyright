@@ -6,7 +6,7 @@ export default async function CharacterDetailPage({
   searchParams,
 }: {
   params: { subjectId: string; entityId: string };
-  searchParams: { new?: string };
+  searchParams: { new?: string; tab?: string };
 }) {
   const data = await loadEntityDetail(params.subjectId, 'character', params.entityId);
   return (
@@ -16,6 +16,7 @@ export default async function CharacterDetailPage({
         subjectId={params.subjectId}
         kind="character"
         isNew={searchParams.new === '1'}
+        initialTab={searchParams.tab}
         {...data}
       />
     </div>

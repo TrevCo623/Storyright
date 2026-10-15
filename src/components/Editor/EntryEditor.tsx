@@ -37,6 +37,8 @@ interface Props {
   crumbPrefix: string;
   /** Which Outline list this entry lives in — the back link returns there. */
   sectionType: SectionType;
+  /** Set when opened from a character/place page — adds it to the back breadcrumb. */
+  from?: { kind: 'character' | 'place'; id: string; name: string; tab: string };
 }
 
 interface RawSuggestionWithId {
@@ -102,7 +104,7 @@ function wordCount(text: string): number {
   return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
-export default function EntryEditor({ subjectId, subjectTitle, entry, crumbPrefix, sectionType }: Props) {
+export default function EntryEditor({ subjectId, subjectTitle, entry, crumbPrefix, sectionType, from }: Props) {
   const router = useRouter();
   const [title, setTitle] = useState(entry.title);
   const titleRef = useRef(entry.title);
@@ -735,13 +737,16 @@ export default function EntryEditor({ subjectId, subjectTitle, entry, crumbPrefi
 
   // Back link → this entry's list on the Outline, saving any pending edit first.
   const backHref = `/subjects/${subjectId}?tab=${sectionType === 'threads' ? 'threads' : 'chapters'}`;
-  const goBack = async () => {
+  const fromHref = from
+    ? `/subjects/${subjectId}/${from.kind === 'character' ? 'characters' : 'places'}/${from.id}?tab=${from.tab}`
+    : backHref;
+  const goBack = async (href: string = backHref) => {
     if (saveTimer.current && editor) {
       clearTimeout(saveTimer.current);
       saveTimer.current = null;
       await doSave(editor).catch(() => {});
     }
-    router.push(backHref);
+    router.push(href);
   };
 
   return (
@@ -750,6 +755,14 @@ export default function EntryEditor({ subjectId, subjectTitle, entry, crumbPrefi
         subjectTitle={subjectTitle}
         backHref={backHref}
         onBack={() => void goBack()}
+        trail={
+          from
+            ? [
+                { label: subjectTitle || 'Untitled', href: backHref, onClick: () => void goBack() },
+                { label: from.name, href: fromHref, onClick: () => void goBack(fromHref) },
+              ]
+            : undefined
+        }
         mode="hover"
         crumb={`${crumbPrefix} – ${title || 'Untitled'}`}
         onSelectTab={goToProjectTab}

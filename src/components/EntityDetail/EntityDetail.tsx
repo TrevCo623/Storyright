@@ -146,6 +146,8 @@ interface Props {
   threadsSectionId: string | null;
   mentions: EntityMention[];
   isNew: boolean;
+  /** Tab to open on (e.g. coming back from a chapter via the breadcrumb). */
+  initialTab?: string;
 }
 
 export default function EntityDetail({
@@ -158,6 +160,7 @@ export default function EntityDetail({
   threadsSectionId,
   mentions,
   isNew,
+  initialTab,
 }: Props) {
   const router = useRouter();
   const cfg = CONFIG[kind];
@@ -180,7 +183,9 @@ export default function EntityDetail({
   });
   const [review, setReview] = useState<EntityReview | null>(entity.review ?? null);
   const [threads, setThreads] = useState(initialThreads);
-  const [tab, setTab] = useState<DetailTab>(cfg.tabs[0].id);
+  const [tab, setTab] = useState<DetailTab>(
+    cfg.tabs.find((t) => t.id === initialTab)?.id ?? cfg.tabs[0].id
+  );
   const [editing, setEditing] = useState<'name' | 'role' | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
   const [reviewing, setReviewing] = useState(false);
@@ -427,7 +432,11 @@ export default function EntityDetail({
               <div className="appear-empty">Once you write {isCharacter ? 'them' : 'it'} into a chapter, it’ll show up here.</div>
             ) : (
               appearances.map((a) => (
-                <Link key={a.chapterId} href={`/subjects/${subjectId}/entries/${a.chapterId}`} className="appear-row">
+                <Link
+                  key={a.chapterId}
+                  href={`/subjects/${subjectId}/entries/${a.chapterId}?from=${kind}:${entity.id}:appearances`}
+                  className="appear-row"
+                >
                   <span className="appear-num">Ch {a.index + 1}</span>
                   <span className="appear-main">
                     <span className="appear-title">{a.title || 'Untitled chapter'}</span>
@@ -455,7 +464,7 @@ export default function EntityDetail({
           <p className="detail-hint">Threads that mention {displayName}. They also live on the main Threads page.</p>
           <div className="entity-grid">
             {relatedThreads.map((t) => (
-              <div key={t.id} className="entity-card" onClick={() => void leaveTo(`/subjects/${subjectId}/entries/${t.id}`)}>
+              <div key={t.id} className="entity-card" onClick={() => void leaveTo(`/subjects/${subjectId}/entries/${t.id}?from=${kind}:${entity.id}:threads`)}>
                 <div className="entity-card-head">
                   <span className="entity-name">{t.title}</span>
                 </div>

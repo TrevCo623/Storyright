@@ -57,6 +57,12 @@ interface Props {
   backLabel?: string;
   /** Runs instead of plain navigation (e.g. to tidy up before leaving). */
   onBack?: () => void;
+  /**
+   * Breadcrumb in place of the single back link, e.g. Story › Mara when a
+   * chapter was opened from Mara's page. Each crumb is its own link; the last
+   * one is where you just came from.
+   */
+  trail?: { label: string; href: string; onClick?: () => void }[];
 }
 
 interface CompactState {
@@ -77,9 +83,10 @@ export default function TopNav({
   backHref = '/subjects',
   backLabel,
   onBack,
+  trail,
 }: Props) {
   const probeRef = useRef<HTMLDivElement | null>(null);
-  const backRef = useRef<HTMLAnchorElement | null>(null);
+  const backRef = useRef<HTMLElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const menuBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -171,10 +178,35 @@ export default function TopNav({
     <header className={className} style={style}>
       <div className="topnav-probe" ref={probeRef} aria-hidden="true" />
       <div className="topnav-left">
+        {trail && trail.length > 1 ? (
+          <div className="topnav-back topnav-trail" ref={(el) => { backRef.current = el; }}>
+            <ChevronLeftIcon />
+            {trail.map((crumb, i) => (
+              <span key={crumb.href} className="topnav-trail-item">
+                {i > 0 && <span className="topnav-trail-sep">/</span>}
+                <Link
+                  href={crumb.href}
+                  className="topnav-trail-link topnav-back-name"
+                  title={i === trail.length - 1 ? `Back to ${crumb.label}` : 'Back to the outline'}
+                  onClick={
+                    crumb.onClick
+                      ? (e) => {
+                          e.preventDefault();
+                          crumb.onClick!();
+                        }
+                      : undefined
+                  }
+                >
+                  {crumb.label}
+                </Link>
+              </span>
+            ))}
+          </div>
+        ) : (
         <Link
           href={backHref}
           className="topnav-back"
-          ref={backRef}
+          ref={(el) => { backRef.current = el; }}
           title={backHref === '/subjects' ? 'Back to all stories' : 'Back to the outline'}
           onClick={
             onBack
@@ -188,6 +220,7 @@ export default function TopNav({
           <ChevronLeftIcon />
           <span className="topnav-back-name">{backLabel ?? (subjectTitle || 'Untitled')}</span>
         </Link>
+        )}
         <div className="topnav-menu-wrap">
           <button
             ref={menuBtnRef}
