@@ -1,0 +1,44 @@
+# Keeps the free-tier Supabase project from auto-pausing.
+#
+# Supabase pauses free projects after 7 days without database activity. This
+# runs a tiny read against the database every 3 days, which resets that clock.
+# It reads one id from `subjects` with the public anon key, so row-level
+# security still applies: it sees nothing private, it just touches Postgres.
+#
+# Repo secrets (Settings → Secrets and variables → Actions) — the same two the
+# desktop release workflow already uses:
+#   NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY
+#
+# Run it by hand anytime from the Actions tab ("Supabase keep-alive" → Run).
+
+name: Supabase keep-alive
+
+on:
+  schedule:
+    - cron: '17 14 */3 * *'   # every 3 days, ~10am New York time
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query the database
+        env:
+          SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "::error::Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY repo secret."
+            exit 1
+          fi
+          status=$(curl -sS -o response.txt -w '%{http_code}' \
+            "${SUPABASE_URL%/}/rest/v1/subjects?select=id&limit=1" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+          echo "Supabase responded with HTTP $status"
+          if [ "$status" -ge 400 ]; then
+            cat response.txt
+            echo "::error::Keep-alive query failed. If the project is already paused, unpause it from the Supabase dashboard."
+            exit 1
+          fi
