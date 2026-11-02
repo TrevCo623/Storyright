@@ -35,10 +35,12 @@ jobs:
           # Strip stray spaces/newlines that sometimes sneak in when pasting secrets.
           SUPABASE_URL=$(printf '%s' "$SUPABASE_URL" | tr -d '[:space:]')
           SUPABASE_ANON_KEY=$(printf '%s' "$SUPABASE_ANON_KEY" | tr -d '[:space:]')
-          echo "Pinging host: $(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://##; s#/.*##')"
+          # Use only the base address, even if the secret includes a path like /rest/v1/.
+          SUPABASE_HOST=$(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://##; s#/.*##')
+          echo "Pinging host: $SUPABASE_HOST"
           set +e
           status=$(curl -sS -o response.txt -w '%{http_code}' \
-            "${SUPABASE_URL%/}/rest/v1/subjects?select=id&limit=1" \
+            "https://$SUPABASE_HOST/rest/v1/subjects?select=id&limit=1" \
             -H "apikey: $SUPABASE_ANON_KEY")
           curl_exit=$?
           set -e
@@ -48,7 +50,7 @@ jobs:
           fi
           echo "Supabase responded with HTTP $status"
           if [ "$status" -ge 400 ]; then
-            cat response.txt
+            cat response.txt; echo
             echo "::error::Keep-alive query failed. If the project is already paused, unpause it from the Supabase dashboard."
             exit 1
           fi
