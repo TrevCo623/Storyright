@@ -32,10 +32,20 @@ jobs:
             echo "::error::Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY repo secret."
             exit 1
           fi
+          # Strip stray spaces/newlines that sometimes sneak in when pasting secrets.
+          SUPABASE_URL=$(printf '%s' "$SUPABASE_URL" | tr -d '[:space:]')
+          SUPABASE_ANON_KEY=$(printf '%s' "$SUPABASE_ANON_KEY" | tr -d '[:space:]')
+          echo "Pinging host: $(printf '%s' "$SUPABASE_URL" | sed -E 's#^https?://##; s#/.*##')"
+          set +e
           status=$(curl -sS -o response.txt -w '%{http_code}' \
             "${SUPABASE_URL%/}/rest/v1/subjects?select=id&limit=1" \
-            -H "apikey: $SUPABASE_ANON_KEY" \
-            -H "Authorization: Bearer $SUPABASE_ANON_KEY")
+            -H "apikey: $SUPABASE_ANON_KEY")
+          curl_exit=$?
+          set -e
+          if [ "$curl_exit" -ne 0 ]; then
+            echo "::error::Couldn't reach Supabase (curl exit $curl_exit). Check the URL secret is https://<project-id>.supabase.co and that the project isn't paused."
+            exit 1
+          fi
           echo "Supabase responded with HTTP $status"
           if [ "$status" -ge 400 ]; then
             cat response.txt
